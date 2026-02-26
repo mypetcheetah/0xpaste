@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'">
+  <title>0xpaste</title>
+  <link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+  <div id="overlay-root">
+    <div id="overlay-panel">
+
+      <!-- Header -->
+      <header class="overlay-header">
+        <div class="header-top">
+          <div class="app-title">0xpaste</div>
+          <button id="settings-btn" class="btn-settings" title="Settings">
+            <img src="../../assets/gear.png" alt="⚙">
+          </button>
+        </div>
+        <div class="header-bottom">
+          <div class="app-subtitle">// clipboard history</div>
+          <div class="header-hotkey" id="header-hotkey">toggle: ctrl + -</div>
+        </div>
+      </header>
+
+      <!-- Clipboard view -->
+      <div id="clipboard-view">
+
+        <!-- Search -->
+        <div class="search-area">
+          <div class="search-wrap">
+            <input
+              type="text"
+              id="search-input"
+              placeholder="> search..."
+              autocomplete="off"
+              spellcheck="false"
+            >
+            <button class="search-clear" id="search-clear">[x]</button>
+          </div>
+        </div>
+
+        <!-- Action bar -->
+        <div class="action-bar">
+          <button id="clear-all-btn">[clear all]</button>
+        </div>
+
+        <!-- Item list -->
+        <div class="item-list-wrap">
+          <div id="item-list"></div>
+        </div>
+
+      </div><!-- /clipboard-view -->
+
+      <!-- Settings view (hidden by default) -->
+      <div id="settings-view">
+
+        <div class="settings-section">
+
+          <!-- Typing speed -->
+          <div class="settings-row">
+            <span class="settings-label">// typing speed</span>
+            <div class="seg-group" id="speed-group">
+              <button class="seg-btn" data-val="slow">slow</button>
+              <button class="seg-btn" data-val="medium">med</button>
+              <button class="seg-btn" data-val="fast">fast</button>
+            </div>
+          </div>
+
+          <!-- Initial delay -->
+          <div class="settings-row settings-col">
+            <div class="settings-row-hdr">
+              <span class="settings-label">// initial delay</span>
+              <span class="settings-value" id="delay-value">2000ms</span>
+            </div>
+            <input type="range" id="delay-slider" min="0" max="4000" step="100" value="2000">
+          </div>
+
+          <!-- Start with Windows -->
+          <div class="settings-row">
+            <span class="settings-label">// start with windows</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="start-windows-toggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- Max history -->
+          <div class="settings-row">
+            <span class="settings-label">// max history</span>
+            <div class="seg-group" id="history-group">
+              <button class="seg-btn" data-val="10">10</button>
+              <button class="seg-btn" data-val="25">25</button>
+              <button class="seg-btn" data-val="50">50</button>
+              <button class="seg-btn" data-val="75">75</button>
+            </div>
+          </div>
+
+          <!-- Hotkey -->
+          <div class="settings-row">
+            <span class="settings-label">// hotkey</span>
+            <div class="hotkey-wrap">
+              <span class="hotkey-display" id="hotkey-display">ctrl + -</span>
+              <button class="hotkey-set-btn" id="hotkey-capture-btn">set</button>
+            </div>
+          </div>
+
+          <!-- Accent color -->
+          <div class="settings-row">
+            <span class="settings-label">// accent color</span>
+            <input type="color" id="accent-color-input" value="#7C3AED">
+          </div>
+
+          <!-- Panel position -->
+          <div class="settings-row">
+            <span class="settings-label">// panel position</span>
+            <div class="seg-group" id="position-group">
+              <button class="seg-btn" data-val="top-left" title="Top left">↖</button>
+              <button class="seg-btn" data-val="top-right" title="Top right">↗</button>
+              <button class="seg-btn" data-val="bottom-left" title="Bottom left">↙</button>
+              <button class="seg-btn" data-val="bottom-right" title="Bottom right">↘</button>
+            </div>
+          </div>
+
+        </div>
+
+      </div><!-- /settings-view -->
+
+      <!-- Footer -->
+      <footer class="overlay-footer">
+        <span class="status-text" id="status-text">:: 0/50 items</span>
+        <span class="typing-indicator" id="typing-indicator">[typing... 0%]</span>
+      </footer>
+
+    </div>
+  </div>
+
+  <script src="overlay.js"></script>
+</body>
+</html>

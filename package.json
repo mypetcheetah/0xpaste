@@ -1,0 +1,84 @@
+{
+  "name": "0xpaste",
+  "version": "1.0.0",
+  "description": "Clipboard history manager for Windows — click or drag to type anywhere, even where Ctrl+V doesn't work.",
+  "main": "src/main/main.js",
+  "author": "mypetcheetah",
+  "license": "MIT",
+  "homepage": "https://github.com/mypetcheetah/0xpaste#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mypetcheetah/0xpaste.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mypetcheetah/0xpaste/issues"
+  },
+  "keywords": [
+    "clipboard",
+    "clipboard-history",
+    "electron",
+    "windows",
+    "productivity",
+    "paste",
+    "sendinput",
+    "rdp",
+    "tray"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "setup": "npm run setup-icon && npm run download-fonts",
+    "setup-icon": "node scripts/generate-icon.js",
+    "download-fonts": "node scripts/download-fonts.js",
+    "dist": "electron-builder",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "electron-store": "8.1.0",
+    "nanoid": "3.3.7"
+  },
+  "devDependencies": {
+    "electron": "26.6.10",
+    "electron-builder": "24.13.3",
+    "png-to-ico": "2.1.8",
+    "sharp": "0.33.2"
+  },
+  "build": {
+    "extends": null,
+    "appId": "com.0xpaste.app",
+    "productName": "0xpaste",
+    "copyright": "Copyright 2024 0xpaste",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*",
+      "!node_modules/.bin"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "src/assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": true,
+      "installerIcon": "src/assets/icon.ico",
+      "uninstallerIcon": "src/assets/icon.ico",
+      "installerHeaderIcon": "src/assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "0xpaste",
+      "include": "build/installer.nsh",
+      "installerLanguages": ["en_US"],
+      "language": "1033",
+      "runAfterFinish": true
+    }
+  }
+}
