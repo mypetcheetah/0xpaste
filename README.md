@@ -4,8 +4,8 @@
 
 <img src="assets/ascii-art-text.png" alt="0xpaste" />
 
-**Clipboard history manager for Windows — with a dark hacker aesthetic.**
-Copy anything. Find it later. Type it anywhere — even where Ctrl+V doesn't work.
+**Clipboard history manager for Windows.**
+Copy anything. Find it later. Type it anywhere, even where Ctrl+V doesn't work.
 
 <br />
 
@@ -17,7 +17,7 @@ Copy anything. Find it later. Type it anywhere — even where Ctrl+V doesn't wor
 
 <br />
 
-> **Add a demo GIF here** — record with [ScreenToGif](https://www.screentogif.com/) and drop it in `/assets/demo.gif`
+> **Add a demo GIF here** - record with [ScreenToGif](https://www.screentogif.com/) and drop it in `/assets/demo.gif`
 
 </div>
 
@@ -25,9 +25,9 @@ Copy anything. Find it later. Type it anywhere — even where Ctrl+V doesn't wor
 
 ## What is 0xpaste?
 
-0xpaste is a lightweight clipboard history manager that sits in your Windows system tray and pops up in the corner of your screen with a hotkey. It tracks everything you copy — up to 75 items — and lets you paste them into any text field by either clicking or dragging, using Windows' `SendInput` API to simulate actual keystrokes.
+0xpaste is a lightweight clipboard history manager that sits in your Windows system tray and pops up in the corner of your screen with a hotkey. It tracks everything you copy (up to 75 items) and lets you paste them into any text field by either clicking or dragging, using Windows' `SendInput` API to simulate actual keystrokes.
 
-This means it works in places where normal Ctrl+V is blocked — like **remote desktop sessions, VMs, browser-based consoles** (vSphere, iDRAC, etc.), and any app that doesn't handle clipboard paste properly.
+This means it works in places where normal Ctrl+V is blocked, like **remote desktop sessions, VMs, browser-based consoles** (vSphere, iDRAC, etc.), and any app that doesn't handle clipboard paste properly.
 
 ---
 
@@ -36,27 +36,27 @@ This means it works in places where normal Ctrl+V is blocked — like **remote d
 | | |
 |---|---|
 | 📋 **Clipboard history** | Auto-tracks everything you copy. Pinned items float to the top, unpinned are FIFO. |
-| ⌨️ **Click to type** | Click an item → click a target field → 0xpaste types it out for you. |
+| ⌨️ **Click to type** | Click an item, click a target field, and 0xpaste types it out for you. |
 | 🖱️ **Drag to type** | Drag an item directly to any text field on any monitor. |
-| 🖥️ **Multi-monitor** | One capture window per display — drop targets work on all screens. |
+| 🖥️ **Multi-monitor** | One capture window per display, drop targets work on all screens. |
 | 🔍 **Live search** | Instantly filter your history as you type. |
 | 📌 **Pin items** | Prevent important items from being rotated out of history. |
 | 👁️ **Mask sensitive items** | Toggle the eye icon to hide item content in the preview. |
 | ⚙️ **Full settings panel** | Typing speed, initial delay, hotkey, accent color, panel position, history limit. |
-| 🎨 **Accent color** | Pick any color — the entire UI updates live. |
+| 🎨 **Accent color** | Pick any color, the entire UI updates live. |
 | 🚀 **Auto-start** | Optionally runs at Windows startup, always ready in the tray. |
 
 ---
 
 ## Installation
 
-### Option A — Download the installer *(recommended)*
+### Option A: Download the installer *(recommended)*
 
 Head to [**Releases**](https://github.com/mypetcheetah/0xpaste/releases) and grab the latest `.exe`.
 
-> **Note on security warnings:** Because 0xpaste uses the Windows `SendInput` API to simulate keystrokes, some antivirus tools may flag it. This is a false positive — the app only types when you explicitly trigger a paste. Add an exclusion in your security software if needed.
+> **Note on security warnings:** Because 0xpaste uses the Windows `SendInput` API to simulate keystrokes, some antivirus tools may flag it. This is a false positive; the app only types when you explicitly trigger a paste. Add an exclusion in your security software if needed.
 
-### Option B — Build from source
+### Option B: Build from source
 
 See [Building from Source](#building-from-source) below.
 
@@ -79,12 +79,12 @@ Once installed, 0xpaste runs in the system tray. Toggle the panel with the hotke
 
 | Action | How |
 |--------|-----|
-| **Type an item** | Click the card → move to target field → click |
+| **Type an item** | Click the card, move to target field, click |
 | **Drag an item** | Hold and drag the card to any text field on any monitor |
 | **Pin / unpin** | Click `⚲` on the card |
 | **Mask content** | Click `👁` on the card |
 | **Delete item** | Click `x` on the card |
-| **Clear history** | Click `[clear all]` → confirm click |
+| **Clear history** | Click `[clear all]`, confirm click |
 | **Search** | Type in the search bar at the top |
 | **Open settings** | Click the `⚙` gear icon in the top-right |
 
@@ -123,7 +123,7 @@ npm run dist
 
 The installer outputs to `dist/0xpaste Setup 1.0.0.exe`.
 
-> **Run `npm start` from PowerShell or cmd.exe — not Git Bash.**
+> **Run `npm start` from PowerShell or cmd.exe, not Git Bash.**
 > In Git Bash/MSYS2, `require('electron')` resolves the npm package path instead of the binary.
 
 ---
@@ -135,11 +135,11 @@ Open the settings panel by clicking the `⚙` icon in the top-right of the overl
 | Setting | Options | Default | What it does |
 |---------|---------|---------|--------------|
 | **Typing speed** | Slow / Med / Fast | Med | Delay between keystrokes: 100ms / 50ms / 15ms |
-| **Initial delay** | 0 – 4000ms slider | 2000ms | How long to wait after clicking before typing starts — gives you time to click the target field |
+| **Initial delay** | 0 - 4000ms slider | 2000ms | How long to wait after clicking before typing starts, giving you time to click the target field |
 | **Start with Windows** | Toggle | On | Launch 0xpaste automatically at login |
 | **Max history** | 10 / 25 / 50 / 75 | 50 | Maximum number of clipboard items to keep |
 | **Hotkey** | Any combo with modifier | `Ctrl + -` | Press `set` and then your desired key combo |
-| **Accent color** | Color picker | `#7C3AED` | Primary UI color — all elements update live |
+| **Accent color** | Color picker | `#7C3AED` | Primary UI color, all elements update live |
 | **Panel position** | ↖ ↗ ↙ ↘ | ↘ | Which corner of the primary display to snap to |
 
 Settings are stored in `%APPDATA%\0xpaste\config.json`.
@@ -167,7 +167,7 @@ Settings are stored in `%APPDATA%\0xpaste\config.json`.
 │       ├── capture/              # Fullscreen transparent drop target
 │       └── settings/             # Standalone settings window
 ├── scripts/
-│   ├── generate-icon.js          # Converts root icon.png → ICO (multi-res)
+│   ├── generate-icon.js          # Converts root icon.png to ICO (multi-res)
 │   └── download-fonts.js         # Downloads Silkscreen font from Google Fonts
 ├── build/
 │   └── installer.nsh             # NSIS custom installer (WOW64-aware cleanup)
@@ -181,10 +181,10 @@ Settings are stored in `%APPDATA%\0xpaste\config.json`.
 Instead of using Ctrl+V (which doesn't work in RDP/VM consoles), 0xpaste uses a PowerShell subprocess that compiles and runs C# code at runtime. The C# code uses the Win32 `SendInput` API with `MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK` flags and `SetThreadDpiAwarenessContext(-4)` for accurate per-monitor DPI handling.
 
 The flow for a click-to-type operation:
-1. User clicks a card → overlay hides
+1. User clicks a card, overlay hides
 2. A fullscreen transparent capture window appears on every monitor
 3. User clicks a target field
-4. Main process reads `getCursorScreenPoint()` (DIP coords) → `dipToScreenPoint()` (physical)
+4. Main process reads `getCursorScreenPoint()` (DIP coords) and converts to `dipToScreenPoint()` (physical)
 5. PowerShell/C# moves the cursor, clicks the field, and types the text keystroke by keystroke
 
 This makes it work even in browser-based VM consoles, vSphere, iDRAC, and any app that blocks clipboard paste.
@@ -193,18 +193,18 @@ This makes it work even in browser-based VM consoles, vSphere, iDRAC, and any ap
 
 ## Tech Stack
 
-- **[Electron 26](https://www.electronjs.org/)** — cross-process app shell
-- **[electron-store](https://github.com/sindresorhus/electron-store)** — JSON settings with schema validation
-- **[nanoid](https://github.com/ai/nanoid)** — unique IDs for clipboard items
-- **PowerShell + C# (Add-Type)** — Win32 `SendInput` for keystroke simulation
-- **NSIS** — Windows installer with WOW64-aware process cleanup
-- **Vanilla HTML/CSS/JS** — no frontend framework, no build step for the UI
+- **[Electron 26](https://www.electronjs.org/)**: cross-process app shell
+- **[electron-store](https://github.com/sindresorhus/electron-store)**: JSON settings with schema validation
+- **[nanoid](https://github.com/ai/nanoid)**: unique IDs for clipboard items
+- **PowerShell + C# (Add-Type)**: Win32 `SendInput` for keystroke simulation
+- **NSIS**: Windows installer with WOW64-aware process cleanup
+- **Vanilla HTML/CSS/JS**: no frontend framework, no build step for the UI
 
 ---
 
 ## License
 
-[MIT](LICENSE) — do whatever you want with it.
+[MIT](LICENSE)
 
 ---
 
