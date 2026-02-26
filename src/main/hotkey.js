@@ -2,7 +2,7 @@
 
 const { globalShortcut } = require('electron');
 
-const DEFAULT_HOTKEY = 'CommandOrControl+-';
+const DEFAULT_HOTKEY = 'CommandOrControl+Space';
 const ESCAPE_KEY     = 'Escape';
 
 let currentHotkey   = DEFAULT_HOTKEY;

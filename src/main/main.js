@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, screen, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, nativeImage, desktopCapturer } = require('electron');
 
 // Prevent setInterval from being throttled when the app is in the background.
 // Without this, clipboard polling (500ms) can stall on some Windows setups.
@@ -174,14 +174,20 @@ function openSettingsWindow() {
 }
 
 // ---------- Overlay toggle ----------
-function showOverlay() {
+function showOverlay(inactive = false) {
   if (!overlayWindow || overlayWindow.isDestroyed()) return;
   // Always recompute position from primary display so multi-monitor setups
   // never place the panel on a secondary screen.
   overlayWindow.setBounds(getOverlayBounds());
   overlayVisible = true;
-  overlayWindow.show();
-  overlayWindow.focus();
+  if (inactive) {
+    // Show without stealing focus — keeps RDP/VM session active so the user
+    // can still press Enter (or any key) in the remote window after a paste.
+    overlayWindow.showInactive();
+  } else {
+    overlayWindow.show();
+    overlayWindow.focus();
+  }
   overlayWindow.webContents.send('overlay:show');
 }
 
@@ -255,8 +261,10 @@ async function executeTyping(x, y) {
       overlayWindow.webContents.send('typing:done');
     }
     // Bring the overlay back so the user can paste the next item without
-    // pressing the hotkey again. Only the hotkey will close it.
-    showOverlay();
+    // pressing the hotkey again. Use inactive=true so the RDP/VM window keeps
+    // keyboard focus — the user can press Enter (or any key) in the remote
+    // session immediately after a paste without clicking back into it.
+    showOverlay(true);
   }
 }
 
@@ -385,6 +393,38 @@ function setupIPC() {
 
   ipcMain.on('open:settings', () => {
     openSettingsWindow();
+  });
+
+  // Screen capture for WebGL glass lens — crops the primary display screenshot
+  // to exactly the overlay panel area and returns it as a data URL.
+  ipcMain.handle('screen:capture-overlay', async () => {
+    try {
+      const bounds  = getOverlayBounds();
+      const display = screen.getPrimaryDisplay();
+      const sf      = display.scaleFactor;
+
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: {
+          width:  Math.round(display.bounds.width  * sf),
+          height: Math.round(display.bounds.height * sf)
+        }
+      });
+
+      if (!sources.length) return null;
+
+      const cropped = sources[0].thumbnail.crop({
+        x:      Math.round(bounds.x      * sf),
+        y:      Math.round(bounds.y      * sf),
+        width:  Math.round(bounds.width  * sf),
+        height: Math.round(bounds.height * sf)
+      });
+
+      return cropped.toDataURL();
+    } catch (e) {
+      console.error('[glass] screen capture failed:', e.message);
+      return null;
+    }
   });
 }
 

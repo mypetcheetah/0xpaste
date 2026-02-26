@@ -1,8 +1,8 @@
 /* ============================================================
-   0xpaste Overlay — Dark Hacker Aesthetic
+   0xpaste Overlay
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Zen+Dots&family=Syne+Mono&display=swap');
 
 :root {
   --bg-primary:       #0D0D0F;
@@ -20,6 +20,61 @@
   --success:          #22C55E;
   --font-brand:       'Silkscreen', 'Courier New', monospace;
   --font-mono:        'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  --panel-shadow:     0 0 0 1px rgba(124, 58, 237, 0.15), 0 24px 48px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.4);
+  --scrollbar-thumb:  rgba(0, 0, 0, 0.55);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.75);
+}
+
+/* ---- White office theme ---- */
+:root[data-theme="white"] {
+  --bg-primary:       #F4F4F6;
+  --bg-secondary:     #FFFFFF;
+  --bg-tertiary:      #EBEBED;
+  --border-default:   #D1D1D6;
+  --border-hover:     #7C3AED;
+  --text-primary:     #1C1C1E;
+  --text-secondary:   #6E6E73;
+  --text-placeholder: #AEAEB2;
+  --font-brand:       'Zen Dots', 'Courier New', monospace;
+  --panel-shadow:     0 0 0 1px rgba(124, 58, 237, 0.15), 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --scrollbar-thumb:  rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+}
+
+/* ---- Glass theme ---- */
+:root[data-theme="glass"] {
+  --bg-primary:       transparent;
+  --bg-secondary:     rgba(255, 255, 255, 0.08);
+  --bg-tertiary:      rgba(255, 255, 255, 0.12);
+  --border-default:   rgba(255, 255, 255, 0.18);
+  --border-hover:     rgba(180, 140, 255, 0.85);
+  --text-primary:     #FFFFFF;
+  --text-secondary:   rgba(255, 255, 255, 0.70);
+  --text-placeholder: rgba(255, 255, 255, 0.35);
+  --font-brand:       'Syne Mono', 'Courier New', monospace;
+  --panel-shadow:     0 6px 6px rgba(0, 0, 0, 0.2), 0 0 20px rgba(0, 0, 0, 0.1);
+  --scrollbar-thumb:  rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.35);
+}
+
+:root[data-theme="glass"] #overlay-panel {
+  background: transparent;
+}
+
+/* ---- Dark office theme ---- */
+:root[data-theme="dark"] {
+  --bg-primary:       #1E1E2E;
+  --bg-secondary:     #27273A;
+  --bg-tertiary:      #313147;
+  --border-default:   #45455F;
+  --border-hover:     #7C3AED;
+  --text-primary:     #CDD6F4;
+  --text-secondary:   #8A8AAE;
+  --text-placeholder: #585879;
+  --font-brand:       'Zen Dots', 'Courier New', monospace;
+  --panel-shadow:     0 0 0 1px rgba(124, 58, 237, 0.2), 0 24px 48px rgba(0, 0, 0, 0.5), 0 8px 16px rgba(0, 0, 0, 0.3);
+  --scrollbar-thumb:  rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
 }
 
 * {
@@ -47,7 +102,56 @@ html, body {
   pointer-events: none;
 }
 
+/* Liquid glass layer base — hidden by default, shown only in glass theme */
+.liquidGlass-effect, .liquidGlass-tint, .liquidGlass-shine {
+  display: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* liquidGlass-effect: blurs desktop + turbulence displacement for liquid refraction */
+:root[data-theme="glass"] .liquidGlass-effect {
+  display: block;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  filter: url(#glass-distortion);
+  overflow: hidden;
+  z-index: 0;
+}
+
+/* liquidGlass-tint: subtle white hint — keep mostly transparent */
+:root[data-theme="glass"] .liquidGlass-tint {
+  display: block;
+  background: rgba(255, 255, 255, 0.08);
+  z-index: 1;
+}
+
+/* liquidGlass-shine: inset edge highlights simulate glass rim */
+:root[data-theme="glass"] .liquidGlass-shine {
+  display: block;
+  box-shadow:
+    inset 2px 2px 1px 0 rgba(255, 255, 255, 0.5),
+    inset -1px -1px 1px 1px rgba(255, 255, 255, 0.5);
+  z-index: 2;
+}
+
+/* liquidGlass-text: content wrapper above all glass layers */
+.liquidGlass-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+:root[data-theme="glass"] .liquidGlass-text {
+  position: relative;
+  z-index: 3;
+}
+
 #overlay-panel {
+  position: relative;
   width: 320px;
   height: 450px;
   background: var(--bg-primary);
@@ -61,10 +165,7 @@ html, body {
   transform: translateX(110%);
   opacity: 0;
   transition: transform 250ms ease-out, opacity 200ms ease-out;
-  box-shadow:
-    0 0 0 1px rgba(124, 58, 237, 0.15),
-    0 24px 48px rgba(0, 0, 0, 0.6),
-    0 8px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--panel-shadow);
 }
 
 #overlay-panel.visible {
@@ -265,12 +366,12 @@ html, body {
 }
 .item-list-wrap::-webkit-scrollbar-thumb,
 #settings-view::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrollbar-thumb);
   border-radius: 2px;
 }
 .item-list-wrap::-webkit-scrollbar-thumb:hover,
 #settings-view::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--scrollbar-thumb-hover);
 }
 
 #item-list {
@@ -431,7 +532,7 @@ html, body {
   display: none;
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 8px 12px;
   min-height: 0;
 }
 
@@ -442,14 +543,14 @@ html, body {
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 
 .settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px;
+  padding: 5px 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: 6px;
@@ -459,7 +560,7 @@ html, body {
 .settings-row.settings-col {
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 4px;
 }
 
 .settings-row-hdr {
@@ -674,5 +775,28 @@ html, body {
 }
 
 .typing-indicator.visible {
+  display: block;
+}
+
+.reset-btn {
+  display: none;
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.5;
+  transition: color 0.15s, opacity 0.15s;
+}
+
+.reset-btn:hover {
+  color: var(--accent-primary);
+  opacity: 1;
+}
+
+.reset-btn.visible {
   display: block;
 }

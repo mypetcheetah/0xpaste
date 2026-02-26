@@ -87,7 +87,7 @@ Once installed, 0xpaste runs in the system tray. Toggle the panel with the hotke
 
 | Default | Action |
 |---------|--------|
-| `Ctrl + -` | Open / close the panel |
+| `Ctrl + Space` | Open / close the panel |
 | `Escape` | Cancel a pending type / drag operation |
 
 > The hotkey is fully configurable in settings. Change it to anything that works for your setup.
@@ -155,7 +155,7 @@ Open the settings panel by clicking the `⚙` icon in the top-right of the overl
 | **Initial delay** | 0 - 4000ms slider | 2000ms | How long to wait after clicking before typing starts, giving you time to click the target field |
 | **Start with Windows** | Toggle | On | Launch 0xpaste automatically at login |
 | **Max history** | 10 / 25 / 50 / 75 | 50 | Maximum number of clipboard items to keep |
-| **Hotkey** | Any combo with modifier | `Ctrl + -` | Press `set` and then your desired key combo |
+| **Hotkey** | Any combo with modifier | `Ctrl + Space` | Press `set` and then your desired key combo |
 | **Accent color** | Color picker | `#7C3AED` | Primary UI color, all elements update live |
 | **Panel position** | ↖ ↗ ↙ ↘ | ↘ | Which corner of the primary display to snap to |
 
