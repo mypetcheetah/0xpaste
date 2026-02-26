@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'">
+  <title>0xpaste — Settings</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="settings-container">
+
+    <header class="settings-header">
+      <div class="settings-title">0xpaste</div>
+      <div class="settings-subtitle">// configuration</div>
+    </header>
+
+    <div class="settings-body">
+
+      <!-- Typing section -->
+      <div class="settings-section">
+        <div class="section-heading">// typing</div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <div class="setting-name">Initial delay before typing</div>
+            <div class="setting-desc">Wait time after clicking target before first keystroke</div>
+          </div>
+          <div class="setting-control" style="display:flex;align-items:center">
+            <input type="number" class="num-input" id="initial-delay" min="0" max="10000" step="100">
+            <span class="input-unit">ms</span>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <div class="setting-name">Delay between characters</div>
+            <div class="setting-desc">Pause between each individual keystroke</div>
+          </div>
+          <div class="setting-control" style="display:flex;align-items:center">
+            <input type="number" class="num-input" id="char-delay" min="10" max="1000" step="10">
+            <span class="input-unit">ms</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hotkey section -->
+      <div class="settings-section">
+        <div class="section-heading">// hotkey</div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <div class="setting-name">Toggle overlay</div>
+            <div class="setting-desc">Global shortcut to show / hide the clipboard panel</div>
+          </div>
+          <div class="setting-control">
+            <span class="hotkey-display">Ctrl + -</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Startup section -->
+      <div class="settings-section">
+        <div class="section-heading">// startup</div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <div class="setting-name">Start with Windows</div>
+            <div class="setting-desc">Launch 0xpaste automatically when Windows starts</div>
+          </div>
+          <div class="setting-control">
+            <label class="toggle">
+              <input type="checkbox" id="start-with-windows">
+              <div class="toggle-track">
+                <div class="toggle-thumb"></div>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- About section -->
+      <div class="settings-section">
+        <div class="section-heading">// about</div>
+
+        <div class="about-block">
+          <div class="about-title">0xpaste</div>
+          <div class="about-version" id="about-version">v1.0.0</div>
+          <div class="about-desc">
+            Clipboard history manager with character-by-character SendKeys typing.<br>
+            No paste events — types directly at the OS level.
+          </div>
+          <a class="about-link" href="https://github.com/0xpaste/0xpaste" target="_blank">
+            // source code &amp; docs
+          </a>
+        </div>
+      </div>
+
+      <div class="saved-flash" id="saved-flash">// saved</div>
+
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

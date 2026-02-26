@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>0xpaste capture</title>
+  <link rel="stylesheet" href="capture.css">
+</head>
+<body>
+
+  <!-- Drag ghost card — follows cursor in drag mode -->
+  <div id="drag-ghost">
+    <div class="ghost-text" id="ghost-text"></div>
+    <div class="ghost-label">// drop to type</div>
+  </div>
+
+  <!-- Click-to-type hint — shown in click mode -->
+  <div id="click-hint">
+    <div class="hint-title">// click target location</div>
+    <div class="hint-subtitle">click where you want the text typed</div>
+    <div class="hint-cancel">[ ESC ] to cancel</div>
+  </div>
+
+  <script src="capture.js"></script>
+</body>
+</html>
