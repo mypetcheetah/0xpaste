@@ -17,7 +17,7 @@ Copy anything. Find it later. Type it anywhere, even where Ctrl+V doesn't work.
 
 <br />
 
-> **Add a demo GIF here** - record with [ScreenToGif](https://www.screentogif.com/) and drop it in `/assets/demo.gif`
+<img src="assets/example.gif" alt="0xpaste demo" width="600" />
 
 </div>
 
@@ -45,6 +45,23 @@ This means it works in places where normal Ctrl+V is blocked, like **remote desk
 | ⚙️ **Full settings panel** | Typing speed, initial delay, hotkey, accent color, panel position, history limit. |
 | 🎨 **Accent color** | Pick any color, the entire UI updates live. |
 | 🚀 **Auto-start** | Optionally runs at Windows startup, always ready in the tray. |
+
+---
+
+## Screenshots
+
+<div align="center">
+<table>
+<tr>
+<td align="center"><b>Clipboard panel</b></td>
+<td align="center"><b>Settings</b></td>
+</tr>
+<tr>
+<td><img src="assets/frontapp.png" alt="Clipboard panel" width="340" /></td>
+<td><img src="assets/settingsapp.png" alt="Settings panel" width="340" /></td>
+</tr>
+</table>
+</div>
 
 ---
 
