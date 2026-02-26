@@ -5,13 +5,13 @@ const Store = require('electron-store');
 const schema = {
   initialDelay: {
     type: 'number',
-    default: 2000,
+    default: 100,
     minimum: 0,
     maximum: 10000
   },
   charDelay: {
     type: 'number',
-    default: 50,
+    default: 15,
     minimum: 10,
     maximum: 1000
   },
@@ -21,7 +21,7 @@ const schema = {
   },
   typingSpeed: {
     type: 'string',
-    default: 'medium'
+    default: 'fast'
   },
   maxHistory: {
     type: 'number',
@@ -31,7 +31,7 @@ const schema = {
   },
   hotkey: {
     type: 'string',
-    default: 'CommandOrControl+-'
+    default: 'CommandOrControl+Space'
   },
   accentColor: {
     type: 'string',
@@ -40,6 +40,10 @@ const schema = {
   panelPosition: {
     type: 'string',
     default: 'bottom-right'
+  },
+  theme: {
+    type: 'string',
+    default: 'default'
   }
 };
 
@@ -47,14 +51,15 @@ const store = new Store({
   name: 'config',
   schema,
   defaults: {
-    initialDelay: 2000,
-    charDelay: 50,
+    initialDelay: 100,
+    charDelay: 15,
     startWithWindows: true,
-    typingSpeed: 'medium',
+    typingSpeed: 'fast',
     maxHistory: 50,
-    hotkey: 'CommandOrControl+-',
+    hotkey: 'CommandOrControl+Space',
     accentColor: '#7C3AED',
-    panelPosition: 'bottom-right'
+    panelPosition: 'bottom-right',
+    theme: 'default'
   }
 });
 
@@ -70,7 +75,8 @@ function getSettings() {
     maxHistory: store.get('maxHistory'),
     hotkey: store.get('hotkey'),
     accentColor: store.get('accentColor'),
-    panelPosition: store.get('panelPosition')
+    panelPosition: store.get('panelPosition'),
+    theme: store.get('theme')
   };
 }
 

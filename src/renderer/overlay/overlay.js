@@ -36,6 +36,7 @@ const settingsBtn    = document.getElementById('settings-btn');
 const clipboardView  = document.getElementById('clipboard-view');
 const settingsView   = document.getElementById('settings-view');
 const headerHotkey   = document.getElementById('header-hotkey');
+const resetBtn       = document.getElementById('reset-defaults-btn');
 
 // ============================================================
 // Settings toggle
@@ -45,12 +46,14 @@ settingsBtn.addEventListener('click', () => {
   settingsBtn.classList.toggle('active', settingsVisible);
   clipboardView.style.display = settingsVisible ? 'none' : '';
   settingsView.classList.toggle('visible', settingsVisible);
+  resetBtn.classList.toggle('visible', settingsVisible);
 });
 
 // ============================================================
 // Overlay show / hide (driven by main)
 // ============================================================
 api.onOverlayShow(() => {
+  _overlayOpen = true;
   panel.classList.remove('hiding');
   // Force reflow so transition fires
   void panel.offsetWidth;
@@ -65,6 +68,7 @@ api.onOverlayHide(() => {
   panel.addEventListener('transitionend', function onEnd() {
     panel.removeEventListener('transitionend', onEnd);
     panel.classList.remove('hiding');
+    _overlayOpen = false;
     // Tell main the hide animation is done
     api.hideOverlayDone();
     // Reset search on close
@@ -359,6 +363,41 @@ document.addEventListener('mouseup', (e) => {
 });
 
 // ============================================================
+// Settings — theme helper + WebGL glass renderer lifecycle
+// ============================================================
+let _glassInited  = false;
+let _overlayOpen  = false;
+
+function _glassInit() {
+  if (_glassInited || !window.glassRenderer) return false;
+  const canvas = document.getElementById('glass-canvas');
+  if (!canvas) return false;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.round(320 * dpr);
+  canvas.height = Math.round(450 * dpr);
+  if (!window.glassRenderer.init(canvas)) return false;
+  _glassInited = true;
+  // Mouse tracking — forward panel-relative coords to renderer
+  const panelEl = document.getElementById('overlay-panel');
+  panelEl.addEventListener('mousemove', (e) => {
+    if (document.documentElement.getAttribute('data-theme') !== 'glass') return;
+    const r = panelEl.getBoundingClientRect();
+    window.glassRenderer.setMouse(e.clientX - r.left, e.clientY - r.top);
+  });
+  return true;
+}
+
+function _glassCapture() {
+  api.captureBackground().then(dataURL => {
+    if (dataURL && _glassInited) window.glassRenderer.loadTexture(dataURL);
+  }).catch(() => {});
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme || 'default');
+}
+
+// ============================================================
 // Settings — accent color helper
 // ============================================================
 function applyAccentColor(hex) {
@@ -521,6 +560,58 @@ function cancelHotkeyCapture() {
 }
 
 // ============================================================
+// Settings — reset to defaults
+// ============================================================
+const DEFAULTS = {
+  typingSpeed:    'fast',
+  initialDelay:   100,
+  startWithWindows: true,
+  maxHistory:     50,
+  hotkey:         'CommandOrControl+Space',
+  accentColor:    '#7C3AED',
+  panelPosition:  'bottom-right',
+  theme:          'default'
+};
+
+function setSegGroup(groupId, val) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.val === String(val));
+  });
+}
+
+resetBtn.addEventListener('click', () => {
+  // Persist all defaults
+  Object.entries(DEFAULTS).forEach(([key, val]) => api.updateSetting(key, val));
+
+  // Update UI controls to reflect defaults
+  setSegGroup('speed-group', DEFAULTS.typingSpeed);
+
+  const delaySlider = document.getElementById('delay-slider');
+  const delayValue  = document.getElementById('delay-value');
+  if (delaySlider) { delaySlider.value = DEFAULTS.initialDelay; }
+  if (delayValue)  { delayValue.textContent = `${DEFAULTS.initialDelay}ms`; }
+
+  const winToggle = document.getElementById('start-windows-toggle');
+  if (winToggle) winToggle.checked = DEFAULTS.startWithWindows;
+
+  setSegGroup('history-group', DEFAULTS.maxHistory);
+
+  const hotkeyDisplay = document.getElementById('hotkey-display');
+  if (hotkeyDisplay) hotkeyDisplay.textContent = acceleratorToDisplay(DEFAULTS.hotkey);
+  if (headerHotkey)  headerHotkey.textContent  = `toggle: ${acceleratorToDisplay(DEFAULTS.hotkey)}`;
+
+  const colorInput = document.getElementById('accent-color-input');
+  if (colorInput) { colorInput.value = DEFAULTS.accentColor; applyAccentColor(DEFAULTS.accentColor); }
+
+  setSegGroup('position-group', DEFAULTS.panelPosition);
+
+  setSegGroup('theme-group', DEFAULTS.theme);
+  applyTheme(DEFAULTS.theme);
+});
+
+// ============================================================
 // Settings — segmented button group helper
 // ============================================================
 function initSegGroup(groupId, currentVal, onChange) {
@@ -620,6 +711,13 @@ function initSettings(settings) {
   // Panel position
   initSegGroup('position-group', settings.panelPosition, (val) => {
     api.updateSetting('panelPosition', val);
+  });
+
+  // Theme
+  applyTheme(settings.theme);
+  initSegGroup('theme-group', settings.theme, (val) => {
+    api.updateSetting('theme', val);
+    applyTheme(val);
   });
 }
 

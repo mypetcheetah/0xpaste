@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTypingDone: (cb) => ipcRenderer.on('typing:done', () => cb()),
   onAccentColor: (cb) => ipcRenderer.on('settings:accent-color', (_, color) => cb(color)),
 
+  // Glass theme: capture screenshot of the area behind the overlay panel
+  captureBackground: () => ipcRenderer.invoke('screen:capture-overlay'),
+
   // Remove listeners (cleanup)
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
 });

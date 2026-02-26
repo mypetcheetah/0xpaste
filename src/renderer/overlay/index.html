@@ -11,6 +11,14 @@
   <div id="overlay-root">
     <div id="overlay-panel">
 
+      <!-- Liquid glass layers (visible only in glass theme) -->
+      <div class="liquidGlass-effect"></div>
+      <div class="liquidGlass-tint"></div>
+      <div class="liquidGlass-shine"></div>
+
+      <!-- Content wrapper -->
+      <div class="liquidGlass-text">
+
       <!-- Header -->
       <header class="overlay-header">
         <div class="header-top">
@@ -21,7 +29,7 @@
         </div>
         <div class="header-bottom">
           <div class="app-subtitle">// clipboard history</div>
-          <div class="header-hotkey" id="header-hotkey">toggle: ctrl + -</div>
+          <div class="header-hotkey" id="header-hotkey">toggle: ctrl + space</div>
         </div>
       </header>
 
@@ -113,6 +121,17 @@
             <input type="color" id="accent-color-input" value="#7C3AED">
           </div>
 
+          <!-- Theme -->
+          <div class="settings-row">
+            <span class="settings-label">// theme</span>
+            <div class="seg-group" id="theme-group">
+              <button class="seg-btn" data-val="default">default</button>
+              <button class="seg-btn" data-val="white">white</button>
+              <button class="seg-btn" data-val="dark">dark</button>
+              <button class="seg-btn" data-val="glass">glass</button>
+            </div>
+          </div>
+
           <!-- Panel position -->
           <div class="settings-row">
             <span class="settings-label">// panel position</span>
@@ -132,11 +151,33 @@
       <footer class="overlay-footer">
         <span class="status-text" id="status-text">:: 0/50 items</span>
         <span class="typing-indicator" id="typing-indicator">[typing... 0%]</span>
+        <button class="reset-btn" id="reset-defaults-btn">[reset]</button>
       </footer>
+
+      </div><!-- /liquidGlass-text -->
 
     </div>
   </div>
 
+  <!-- Liquid glass SVG filter (hidden, referenced by CSS filter on .liquidGlass-effect) -->
+  <svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+    <filter id="glass-distortion" x="0%" y="0%" width="100%" height="100%" filterUnits="objectBoundingBox">
+      <feTurbulence type="fractalNoise" baseFrequency="0.01 0.01" numOctaves="1" seed="5" result="turbulence"/>
+      <feComponentTransfer in="turbulence" result="mapped">
+        <feFuncR type="gamma" amplitude="1" exponent="10" offset="0.5"/>
+        <feFuncG type="gamma" amplitude="0" exponent="1" offset="0"/>
+        <feFuncB type="gamma" amplitude="0" exponent="1" offset="0.5"/>
+      </feComponentTransfer>
+      <feGaussianBlur in="turbulence" stdDeviation="3" result="softMap"/>
+      <feSpecularLighting in="softMap" surfaceScale="5" specularConstant="1" specularExponent="100" lighting-color="white" result="specLight">
+        <fePointLight x="-200" y="-200" z="300"/>
+      </feSpecularLighting>
+      <feComposite in="specLight" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="litImage"/>
+      <feDisplacementMap in="SourceGraphic" in2="softMap" scale="150" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </svg>
+
+  <script src="glass-renderer.js"></script>
   <script src="overlay.js"></script>
 </body>
 </html>
