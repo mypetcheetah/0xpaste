@@ -2,7 +2,7 @@
 
 <br />
 
-<img src="assets/ascii-art-text.png" alt="0xpaste" />
+<img src="assets/asciinew.png" alt="0xpaste" />
 
 **Clipboard history manager for Windows.**
 Copy anything. Find it later. Type it anywhere, even where Ctrl+V doesn't work.
