@@ -11,7 +11,7 @@ Copy anything. Find it later. Type it anywhere, even where Ctrl+V doesn't work.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-26-47848F?style=flat-square&logo=electron&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.0.0-7C3AED?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.2-7C3AED?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-22C55E?style=flat-square)
 ![Built with JS](https://img.shields.io/badge/built%20with-vanilla%20JS-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
 
@@ -138,7 +138,7 @@ npm start
 npm run dist
 ```
 
-The installer outputs to `dist/0xpaste Setup 1.0.0.exe`.
+The installer outputs to `dist/0xpaste Setup 1.0.2.exe`.
 
 > **Run `npm start` from PowerShell or cmd.exe, not Git Bash.**
 > In Git Bash/MSYS2, `require('electron')` resolves the npm package path instead of the binary.
@@ -216,6 +216,29 @@ This makes it work even in browser-based VM consoles, vSphere, iDRAC, and any ap
 - **PowerShell + C# (Add-Type)**: Win32 `SendInput` for keystroke simulation
 - **NSIS**: Windows installer with WOW64-aware process cleanup
 - **Vanilla HTML/CSS/JS**: no frontend framework, no build step for the UI
+
+---
+
+## TODO
+
+Planned improvements and known bugs tracked here.
+
+### Features
+
+- [ ] **Auto-type Enter** — after typing is complete, automatically send an Enter keystroke so the user does not have to press Enter manually
+- [ ] **Typing killswitch** — press a key (e.g. `Escape`) during an active type operation to immediately cancel it mid-word
+- [ ] **Ultrafast typing speed** — add a fourth speed tier (`ultrafast`) with near-zero inter-keystroke delay for long texts on fast machines
+
+### Bug fixes
+
+- [ ] **Max history not enforced** — the history list can grow beyond the configured maximum; trim logic needs to run on every new item added
+- [ ] **Default initial delay 0 ms** — change the default value for the initial delay setting from 2000 ms to 0 ms
+
+### UI / UX
+
+- [ ] **Settings button color filter** — the gear icon does not respond to the current accent color; apply a CSS `filter` so it inherits the accent hue
+- [ ] **Settings button glow fix** — the active-state glow on the gear button is misaligned or missing on some themes; recalculate the drop-shadow to match the accent color correctly
+- [ ] **Password masking** — clipboard items that look like passwords should be partially hidden by default: show the first 5 characters, replace the rest with `•` dots; the eye icon toggles between masked (default, first 5 chars visible) and fully revealed
 
 ---
 
