@@ -77,7 +77,7 @@ api.onOverlayHide(() => {
     };
   })();
 
-  // If panel isn't visible, transitionend won't fire — ack immediately.
+  // If panel isn't visible, transitionend won't fire - ack immediately.
   if (!panel.classList.contains('visible')) {
     finish();
     return;
@@ -397,7 +397,7 @@ document.addEventListener('mouseup', (e) => {
 });
 
 // ============================================================
-// Settings — theme helper + WebGL glass renderer lifecycle
+// Settings - theme helper + WebGL glass renderer lifecycle
 // ============================================================
 let _glassInited  = false;
 let _overlayOpen  = false;
@@ -411,7 +411,7 @@ function _glassInit() {
   canvas.height = Math.round(450 * dpr);
   if (!window.glassRenderer.init(canvas)) return false;
   _glassInited = true;
-  // Mouse tracking — forward panel-relative coords to renderer
+  // Mouse tracking - forward panel-relative coords to renderer
   const panelEl = document.getElementById('overlay-panel');
   panelEl.addEventListener('mousemove', (e) => {
     if (document.documentElement.getAttribute('data-theme') !== 'glass') return;
@@ -431,8 +431,13 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme || 'default');
 }
 
+function applySlideDirection(pos) {
+  const isLeft = pos === 'top-left' || pos === 'bottom-left';
+  panel.classList.toggle('slide-left', isLeft);
+}
+
 // ============================================================
-// Settings — accent color helper
+// Settings - accent color helper
 // ============================================================
 function applyAccentColor(hex) {
   // Parse hex to HSL for deriving glow (lighter) and muted (darker) variants
@@ -482,7 +487,7 @@ function applyAccentColor(hex) {
 }
 
 // ============================================================
-// Settings — hotkey display helper
+// Settings - hotkey display helper
 // ============================================================
 function acceleratorToDisplay(acc) {
   return acc
@@ -497,7 +502,7 @@ function acceleratorToDisplay(acc) {
 }
 
 // ============================================================
-// Settings — hotkey capture
+// Settings - hotkey capture
 // ============================================================
 let capturingHotkey = false;
 let hotkeyKeydownHandler = null;
@@ -520,7 +525,7 @@ function startHotkeyCapture() {
   window.addEventListener('blur', cancelHotkeyCapture, { once: true });
 
   hotkeyKeydownHandler = (e) => {
-    // Only modifier keys pressed — wait
+    // Only modifier keys pressed - wait
     if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
 
     e.preventDefault();
@@ -564,7 +569,7 @@ function startHotkeyCapture() {
     display.classList.remove('capturing');
     btn.textContent = 'set';
 
-    // Save — main will re-register the new hotkey via settings:update handler
+    // Save - main will re-register the new hotkey via settings:update handler
     api.updateSetting('hotkey', accelerator);
 
     // Update header display
@@ -594,7 +599,7 @@ function cancelHotkeyCapture() {
 }
 
 // ============================================================
-// Settings — reset to defaults
+// Settings - reset to defaults
 // ============================================================
 const DEFAULTS = {
   typingSpeed:    'xfast',
@@ -640,13 +645,14 @@ resetBtn.addEventListener('click', () => {
   if (colorInput) { colorInput.value = DEFAULTS.accentColor; applyAccentColor(DEFAULTS.accentColor); }
 
   setSegGroup('position-group', DEFAULTS.panelPosition);
+  applySlideDirection(DEFAULTS.panelPosition);
 
   setSegGroup('theme-group', DEFAULTS.theme);
   applyTheme(DEFAULTS.theme);
 });
 
 // ============================================================
-// Settings — segmented button group helper
+// Settings - segmented button group helper
 // ============================================================
 function initSegGroup(groupId, currentVal, onChange) {
   const group = document.getElementById(groupId);
@@ -665,7 +671,7 @@ function initSegGroup(groupId, currentVal, onChange) {
 }
 
 // ============================================================
-// Settings — initialise all controls from stored settings
+// Settings - initialise all controls from stored settings
 // ============================================================
 function initSettings(settings) {
   // Typing speed
@@ -754,8 +760,10 @@ function initSettings(settings) {
   }
 
   // Panel position
+  applySlideDirection(settings.panelPosition);
   initSegGroup('position-group', settings.panelPosition, (val) => {
     api.updateSetting('panelPosition', val);
+    applySlideDirection(val);
   });
 
   // Theme

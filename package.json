@@ -1,7 +1,7 @@
 {
   "name": "0xpaste",
-  "version": "1.0.4",
-  "description": "Clipboard history manager for Windows — click or drag to type anywhere, even where Ctrl+V doesn't work.",
+  "version": "1.0.5",
+  "description": "Clipboard history manager for Windows - click or drag to type anywhere, even where Ctrl+V doesn't work.",
   "main": "src/main/main.js",
   "author": "mypetcheetah",
   "license": "MIT",
