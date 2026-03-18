@@ -2,6 +2,7 @@
 
 const { clipboard } = require('electron');
 const { nanoid } = require('nanoid');
+const { isPassword } = require('../passwordDetector');
 
 let maxHistory = 50;
 const POLL_INTERVAL_MS = 500;
@@ -36,10 +37,11 @@ function poll() {
   lastText = text;
 
   const item = {
-    id: nanoid(),
+    id:         nanoid(),
     text,
-    timestamp: Date.now(),
-    pinned: false
+    timestamp:  Date.now(),
+    pinned:     false,
+    isPassword: isPassword(text)
   };
 
   addToHistory(item);

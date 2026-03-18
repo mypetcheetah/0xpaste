@@ -1,6 +1,9 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, screen, nativeImage, desktopCapturer } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, nativeImage, desktopCapturer } = require('electron');
+
+// Remove the default application menu (File, Edit, View, Window, Help)
+Menu.setApplicationMenu(null);
 
 // Prevent setInterval from being throttled when the app is in the background.
 // Without this, clipboard polling (500ms) can stall on some Windows setups.
@@ -11,7 +14,7 @@ const settingsStore = require('./settings-store');
 const clipboardMonitor = require('./clipboard-monitor');
 const typingEngine = require('./typing-engine');
 const hotkey = require('./hotkey');
-const { createTray, destroyTray } = require('./tray');
+const { createTray, destroyTray, setTypingMode } = require('./tray');
 
 // Windows
 let overlayWindow  = null;
@@ -157,6 +160,7 @@ function openSettingsWindow() {
     height: 520,
     resizable: false,
     maximizable: false,
+    autoHideMenuBar: true,
     title: '0xpaste — Settings',
     show: false,
     webPreferences: {
@@ -239,7 +243,18 @@ async function executeTyping(x, y) {
 
   const settings = settingsStore.getSettings();
 
-  hotkey.registerEscape(() => typingEngine.cancel());
+  setTypingMode(true);
+
+  // Mouse-movement killswitch — works even in RDP where keyboard shortcuts
+  // are intercepted. Poll local cursor position; if it moves > 80px from the
+  // drop point, cancel typing immediately.
+  const CANCEL_DIST = 80;
+  const startMouse  = screen.getCursorScreenPoint();
+  const mousePoll   = setInterval(() => {
+    const cur  = screen.getCursorScreenPoint();
+    const dist = Math.hypot(cur.x - startMouse.x, cur.y - startMouse.y);
+    if (dist > CANCEL_DIST) typingEngine.cancel();
+  }, 80);
 
   const progressCallback = (percent) => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -247,18 +262,19 @@ async function executeTyping(x, y) {
     }
   };
 
-  // Convert DIP logical pixels -> physical pixels.
-  // screen.getCursorScreenPoint() returns DIP coords; dipToScreenPoint() converts
-  // correctly for per-monitor DPI setups without manual * scaleFactor (which
-  // double-scales and causes clicks to overshoot toward the bottom of the screen).
   const phys = screen.dipToScreenPoint({ x, y });
 
+  let wasCancelled = false;
   try {
     await typingEngine.startTyping(text, phys.x, phys.y, settings, progressCallback);
+  } catch (_) {
+    wasCancelled = true;
   } finally {
-    hotkey.unregisterEscape();
+    clearInterval(mousePoll);
+    wasCancelled = wasCancelled || typingEngine.wasCancelled();
+    setTypingMode(false);
     if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.webContents.send('typing:done');
+      overlayWindow.webContents.send('typing:done', { cancelled: wasCancelled });
     }
     // Bring the overlay back so the user can paste the next item without
     // pressing the hotkey again. Use inactive=true so the RDP/VM window keeps
@@ -445,12 +461,6 @@ if (!gotLock) {
     applyAutoStart(settings.startWithWindows);
     clipboardMonitor.setMaxHistory(settings.maxHistory);
 
-    // Detect fresh install: key absent means the store file was just created
-    const isFirstRun = !settingsStore.store.has('firstRun');
-    if (isFirstRun) {
-      settingsStore.store.set('firstRun', false);
-    }
-
     createOverlayWindow();
     createCaptureWindows();
 
@@ -459,15 +469,20 @@ if (!gotLock) {
     screen.on('display-removed',        recreateCaptureWindows);
     screen.on('display-metrics-changed', recreateCaptureWindows);
 
-    // On first install, show the overlay as soon as it is ready
-    if (isFirstRun) {
-      overlayWindow.once('ready-to-show', showOverlay);
-    }
+    // Show overlay on startup — delay lets the installer close and release
+    // the foreground lock so Windows allows us to steal focus.
+    overlayWindow.once('ready-to-show', () => {
+      setTimeout(() => {
+        app.focus();
+        showOverlay();
+      }, 600);
+    });
 
     createTray(
       toggleOverlay,
       openSettingsWindow,
-      () => { app.quit(); }
+      () => { app.quit(); },
+      () => { typingEngine.cancel(); }
     );
 
     // Register hotkey with persisted binding

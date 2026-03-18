@@ -220,6 +220,7 @@ Write-Host "DONE"
 const state = {
   active:           false,
   cancelled:        false,
+  lastCancelled:    false,
   childProcess:     null,
   progressCallback: null
 };
@@ -234,7 +235,7 @@ async function startTyping(text, x, y, settings, progressCallback) {
   state.cancelled        = false;
   state.progressCallback = progressCallback || null;
 
-  const { initialDelay, charDelay } = settings;
+  const { initialDelay, charDelay, autoEnter } = settings;
 
   const tmpText   = path.join(os.tmpdir(), `0xpaste_text_${Date.now()}.txt`);
   const tmpScript = path.join(os.tmpdir(), `0xpaste_typer_${Date.now()}.ps1`);
@@ -303,9 +304,23 @@ async function startTyping(text, x, y, settings, progressCallback) {
       });
     });
 
+    // Send Enter after typing if autoEnter is enabled
+    if (autoEnter && !state.cancelled) {
+      await new Promise((resolve) => {
+        const ps = spawn('powershell.exe', [
+          '-NonInteractive', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+          '-Command',
+          'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")'
+        ], { windowsHide: true, stdio: 'ignore' });
+        ps.on('close', resolve);
+        ps.on('error', resolve);
+      });
+    }
+
   } finally {
     try { fs.unlinkSync(tmpText);   } catch (_) {}
     try { fs.unlinkSync(tmpScript); } catch (_) {}
+    state.lastCancelled    = state.cancelled;
     state.active           = false;
     state.cancelled        = false;
     state.childProcess     = null;
@@ -329,4 +344,8 @@ function isAvailable() {
   return true; // PowerShell is always available on Windows 7+
 }
 
-module.exports = { startTyping, cancel, isTyping, isAvailable };
+function wasCancelled() {
+  return state.lastCancelled;
+}
+
+module.exports = { startTyping, cancel, isTyping, isAvailable, wasCancelled };

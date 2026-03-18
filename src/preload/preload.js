@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onOverlayShow: (cb) => ipcRenderer.on('overlay:show', () => cb()),
   onOverlayHide: (cb) => ipcRenderer.on('overlay:hide', () => cb()),
   onTypingProgress: (cb) => ipcRenderer.on('typing:progress', (_, percent) => cb(percent)),
-  onTypingDone: (cb) => ipcRenderer.on('typing:done', () => cb()),
+  onTypingDone: (cb) => ipcRenderer.on('typing:done', (_, data) => cb(data)),
   onAccentColor: (cb) => ipcRenderer.on('settings:accent-color', (_, color) => cb(color)),
 
   // Glass theme: capture screenshot of the area behind the overlay panel
