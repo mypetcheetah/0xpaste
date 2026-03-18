@@ -1,7 +1,7 @@
 'use strict';
 
 // ============================================================
-// WebGL Liquid Glass Renderer — 0xpaste overlay
+// WebGL Liquid Glass Renderer - 0xpaste overlay
 //
 // Architecture:
 //   - Canvas sits behind panel content (z-index 0)
@@ -86,7 +86,7 @@ const FRAG_SRC = `
       fragColor   = mix(texture2D(iChannel0, uv), lighting, transition);
       fragColor.a = transition;   // smooth edge; fully transparent outside lens
     } else {
-      // Outside lens — transparent so CSS backdrop-filter shows through
+      // Outside lens - transparent so CSS backdrop-filter shows through
       fragColor = vec4(0.0);
     }
   }

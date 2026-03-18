@@ -14,11 +14,12 @@ const settingsStore = require('./settings-store');
 const clipboardMonitor = require('./clipboard-monitor');
 const typingEngine = require('./typing-engine');
 const hotkey = require('./hotkey');
-const { createTray, destroyTray, setTypingMode } = require('./tray');
+const { createTray, destroyTray, setTypingMode, setUpdateAvailable } = require('./tray');
+const { checkForUpdates, openReleasesPage } = require('./updater');
 
 // Windows
 let overlayWindow  = null;
-let captureWindows = []; // one BrowserWindow per display — avoids multi-monitor DPI event issues
+let captureWindows = []; // one BrowserWindow per display - avoids multi-monitor DPI event issues
 let settingsWindow = null;
 
 // State
@@ -161,7 +162,7 @@ function openSettingsWindow() {
     resizable: false,
     maximizable: false,
     autoHideMenuBar: true,
-    title: '0xpaste — Settings',
+    title: '0xpaste - Settings',
     show: false,
     webPreferences: {
       contextIsolation: true,
@@ -185,7 +186,7 @@ function showOverlay(inactive = false) {
   overlayWindow.setBounds(getOverlayBounds());
   overlayVisible = true;
   if (inactive) {
-    // Show without stealing focus — keeps RDP/VM session active so the user
+    // Show without stealing focus - keeps RDP/VM session active so the user
     // can still press Enter (or any key) in the remote window after a paste.
     overlayWindow.showInactive();
   } else {
@@ -245,7 +246,7 @@ async function executeTyping(x, y) {
 
   setTypingMode(true);
 
-  // Mouse-movement killswitch — works even in RDP where keyboard shortcuts
+  // Mouse-movement killswitch - works even in RDP where keyboard shortcuts
   // are intercepted. Poll local cursor position; if it moves > 80px from the
   // drop point, cancel typing immediately.
   const CANCEL_DIST = 80;
@@ -278,7 +279,7 @@ async function executeTyping(x, y) {
     }
     // Bring the overlay back so the user can paste the next item without
     // pressing the hotkey again. Use inactive=true so the RDP/VM window keeps
-    // keyboard focus — the user can press Enter (or any key) in the remote
+    // keyboard focus - the user can press Enter (or any key) in the remote
     // session immediately after a paste without clicking back into it.
     showOverlay(true);
   }
@@ -310,7 +311,7 @@ function setupIPC() {
 
   ipcMain.on('typing:start-drag', (_, { text }) => {
     typingPending = { text, mode: 'drag' };
-    // Hide overlay FIRST — Win32 releases mouse capture when window is hidden.
+    // Hide overlay FIRST - Win32 releases mouse capture when window is hidden.
     // This allows the capture windows to receive subsequent mouse events.
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.hide();
@@ -333,7 +334,7 @@ function setupIPC() {
   });
 
   ipcMain.on('capture:drop-target', (_) => {
-    // Use getCursorScreenPoint() from the main process — guaranteed logical pixels.
+    // Use getCursorScreenPoint() from the main process - guaranteed logical pixels.
     // Renderer's event.screenX/Y can be physical pixels depending on DPI mode,
     // causing double-scaling errors that grow larger toward the bottom of the screen.
     const point = screen.getCursorScreenPoint();
@@ -411,7 +412,7 @@ function setupIPC() {
     openSettingsWindow();
   });
 
-  // Screen capture for WebGL glass lens — crops the primary display screenshot
+  // Screen capture for WebGL glass lens - crops the primary display screenshot
   // to exactly the overlay panel area and returns it as a data URL.
   ipcMain.handle('screen:capture-overlay', async () => {
     try {
@@ -445,7 +446,7 @@ function setupIPC() {
 }
 
 // ---------- App lifecycle ----------
-// Single instance lock — must be before app.whenReady
+// Single instance lock - must be before app.whenReady
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -469,7 +470,7 @@ if (!gotLock) {
     screen.on('display-removed',        recreateCaptureWindows);
     screen.on('display-metrics-changed', recreateCaptureWindows);
 
-    // Show overlay on startup — delay lets the installer close and release
+    // Show overlay on startup - delay lets the installer close and release
     // the foreground lock so Windows allows us to steal focus.
     overlayWindow.once('ready-to-show', () => {
       setTimeout(() => {
@@ -488,6 +489,11 @@ if (!gotLock) {
     // Register hotkey with persisted binding
     hotkey.registerHotkey(toggleOverlay, settings.hotkey);
 
+    // Check for updates in the background - silent on any error
+    checkForUpdates((version) => {
+      setUpdateAvailable(version, openReleasesPage);
+    });
+
     clipboardMonitor.start((item) => {
       if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.webContents.send('clipboard:new-item', item);
@@ -498,7 +504,7 @@ if (!gotLock) {
   });
 
   app.on('window-all-closed', () => {
-    // Do not quit — app lives in system tray
+    // Do not quit - app lives in system tray
   });
 
   app.on('will-quit', () => {

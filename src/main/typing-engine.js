@@ -160,14 +160,15 @@ Start-Sleep -Milliseconds 200
 # Read text from temp file (handles all Unicode correctly)
 $text = [System.IO.File]::ReadAllText($textFile, [System.Text.Encoding]::UTF8)
 
-$total = $text.Length
+$chars = $text.ToCharArray() | Where-Object { [int]$_ -ne 13 }
+$total = $chars.Count
 if ($total -eq 0) {
     Write-Host "DONE"
     exit
 }
 
 $i = 0
-foreach ($char in $text.ToCharArray()) {
+foreach ($char in $chars) {
     $i++
     $code = [int][char]$char
 
@@ -185,8 +186,10 @@ foreach ($char in $text.ToCharArray()) {
         '['  { $sendKey = '{[}' }
         ']'  { $sendKey = '{]}' }
         default {
-            if ($code -eq 13 -or $code -eq 10) {
-                $sendKey = '~'         # Enter
+            if ($code -eq 13) {
+                $sendKey = $null       # Skip CR - \r\n pairs only fire on \n
+            } elseif ($code -eq 10) {
+                $sendKey = '~'         # Enter (LF)
             } elseif ($code -eq 9) {
                 $sendKey = '{TAB}'     # Tab
             } else {

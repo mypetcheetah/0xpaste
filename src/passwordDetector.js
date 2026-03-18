@@ -1,7 +1,7 @@
 'use strict';
 
 // ============================================================
-// Password detector — scoring heuristics
+// Password detector - scoring heuristics
 // Returns a score 0-100. Threshold >= 40 = likely password.
 // ============================================================
 
