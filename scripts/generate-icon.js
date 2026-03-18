@@ -1,4 +1,4 @@
-extract /**
+/**
  * generate-icon.js
  * Converts root icon.png into src/assets/icon.ico (multi-resolution)
  * and copies the PNG.

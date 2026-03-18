@@ -8,6 +8,7 @@ const api = window.electronAPI;
 
 // ---- State ----
 let history = [];
+let maxHistory = 25;
 let searchQuery = '';
 let selectedItemId = null;
 let clearConfirmTimer = null;
@@ -32,6 +33,7 @@ const clearAllBtn    = document.getElementById('clear-all-btn');
 const itemList       = document.getElementById('item-list');
 const statusText     = document.getElementById('status-text');
 const typingInd      = document.getElementById('typing-indicator');
+const cancelHint     = document.getElementById('cancel-hint');
 const settingsBtn    = document.getElementById('settings-btn');
 const clipboardView  = document.getElementById('clipboard-view');
 const settingsView   = document.getElementById('settings-view');
@@ -62,19 +64,30 @@ api.onOverlayShow(() => {
 });
 
 api.onOverlayHide(() => {
+  const finish = (() => {
+    let done = false;
+    return () => {
+      if (done) return;
+      done = true;
+      panel.classList.remove('hiding');
+      _overlayOpen = false;
+      api.hideOverlayDone();
+      clearSearch();
+      selectedItemId = null;
+    };
+  })();
+
+  // If panel isn't visible, transitionend won't fire — ack immediately.
+  if (!panel.classList.contains('visible')) {
+    finish();
+    return;
+  }
+
   panel.classList.remove('visible');
   panel.classList.add('hiding');
-
-  panel.addEventListener('transitionend', function onEnd() {
-    panel.removeEventListener('transitionend', onEnd);
-    panel.classList.remove('hiding');
-    _overlayOpen = false;
-    // Tell main the hide animation is done
-    api.hideOverlayDone();
-    // Reset search on close
-    clearSearch();
-    selectedItemId = null;
-  }, { once: true });
+  panel.addEventListener('transitionend', finish, { once: true });
+  // Fallback in case transitionend never fires
+  setTimeout(finish, 400);
 });
 
 // ============================================================
@@ -82,12 +95,21 @@ api.onOverlayHide(() => {
 // ============================================================
 api.onInitialHistory((h) => {
   history = h;
+  // Auto-mask items flagged as passwords
+  history.forEach(item => { if (item.isPassword) hiddenItems.add(item.id); });
   renderList();
   updateStatus();
 });
 
 api.onNewItem((item) => {
+  if (item.isPassword) hiddenItems.add(item.id);
   history.unshift(item);
+  // Trim oldest unpinned items if over the limit
+  const unpinned = history.filter(i => !i.pinned);
+  if (unpinned.length > maxHistory) {
+    const removeIds = new Set(unpinned.slice(maxHistory).map(i => i.id));
+    history = history.filter(i => !removeIds.has(i.id));
+  }
   renderList();
   updateStatus();
   // Flash the new item
@@ -114,8 +136,14 @@ api.onTypingProgress((percent) => {
   typingInd.classList.add('visible');
 });
 
-api.onTypingDone(() => {
-  typingInd.classList.remove('visible');
+api.onTypingDone(({ cancelled } = {}) => {
+  if (cancelled) {
+    typingInd.textContent = '[cancelled]';
+    typingInd.classList.add('visible');
+    setTimeout(() => typingInd.classList.remove('visible'), 1200);
+  } else {
+    typingInd.classList.remove('visible');
+  }
   selectedItemId = null;
   renderList();
 });
@@ -220,10 +248,16 @@ function renderList() {
   }
 }
 
+function buildMaskedPreview(text) {
+  const visible = escapeHTML(text.slice(0, 4));
+  const dots    = '•'.repeat(Math.min(text.length - 4, 24));
+  return `<span class="preview-visible">${visible}</span><span class="preview-dots">${dots}</span>`;
+}
+
 function buildCardHTML(item) {
   const isHidden  = hiddenItems.has(item.id);
   const preview   = isHidden
-    ? '•'.repeat(Math.min(item.text.length, 32))
+    ? buildMaskedPreview(item.text)
     : escapeHTML(item.text);
   const charCount = item.text.length;
   const ts        = relativeTime(item.timestamp);
@@ -312,7 +346,7 @@ function removeItem(id, cardEl) {
 
 function updateStatus() {
   const total = history.length;
-  statusText.textContent = `:: ${total}/50 items`;
+  statusText.textContent = `:: ${total}/${maxHistory} items`;
 }
 
 function escapeHTML(str) {
@@ -563,10 +597,10 @@ function cancelHotkeyCapture() {
 // Settings — reset to defaults
 // ============================================================
 const DEFAULTS = {
-  typingSpeed:    'fast',
-  initialDelay:   100,
+  typingSpeed:    'xfast',
+  initialDelay:   25,
   startWithWindows: true,
-  maxHistory:     50,
+  maxHistory:     25,
   hotkey:         'CommandOrControl+Space',
   accentColor:    '#7C3AED',
   panelPosition:  'bottom-right',
@@ -657,6 +691,15 @@ function initSettings(settings) {
     });
   }
 
+  // Auto enter
+  const autoEnterToggle = document.getElementById('auto-enter-toggle');
+  if (autoEnterToggle) {
+    autoEnterToggle.checked = settings.autoEnter ?? false;
+    autoEnterToggle.addEventListener('change', () => {
+      api.updateSetting('autoEnter', autoEnterToggle.checked);
+    });
+  }
+
   // Start with Windows
   const winToggle = document.getElementById('start-windows-toggle');
   if (winToggle) {
@@ -667,8 +710,10 @@ function initSettings(settings) {
   }
 
   // Max history
+  maxHistory = settings.maxHistory ?? 50;
   initSegGroup('history-group', settings.maxHistory, (val) => {
-    api.updateSetting('maxHistory', parseInt(val, 10));
+    maxHistory = parseInt(val, 10);
+    api.updateSetting('maxHistory', maxHistory);
   });
 
   // Hotkey display
