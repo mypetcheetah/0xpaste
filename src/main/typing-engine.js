@@ -95,6 +95,41 @@ public class OxPasteWin32 {
     [DllImport("user32.dll")]
     static extern bool SetForegroundWindow(IntPtr hWnd);
 
+        // --- Keyboard INPUT (same 40-byte layout as mouse INPUT) ---
+    const uint INPUT_KEYBOARD    = 1;
+    const uint KEYEVENTF_UNICODE = 0x0004;
+    const uint KEYEVENTF_KEYUP   = 0x0002;
+
+    [StructLayout(LayoutKind.Explicit, Size = 40)]
+    struct KBDINPUT {
+        [FieldOffset( 0)] public uint   type;
+        [FieldOffset( 8)] public ushort wVk;
+        [FieldOffset(10)] public ushort wScan;
+        [FieldOffset(12)] public uint   dwFlags;
+        [FieldOffset(16)] public uint   time;
+        [FieldOffset(32)] public IntPtr dwExtraInfo;
+    }
+
+    [DllImport("user32.dll", SetLastError = true, EntryPoint = "SendInput")]
+    static extern uint SendInputKbd(uint nInputs, KBDINPUT[] pInputs, int cbSize);
+
+    // Send a Unicode character directly via SendInput - bypasses all dead-key processing
+    public static void SendUnicode(char c) {
+        int sz = Marshal.SizeOf(typeof(KBDINPUT));
+        KBDINPUT[] dn = new KBDINPUT[1];
+        dn[0].type    = INPUT_KEYBOARD;
+        dn[0].wVk     = 0;
+        dn[0].wScan   = (ushort)c;
+        dn[0].dwFlags = KEYEVENTF_UNICODE;
+        SendInputKbd(1, dn, sz);
+        KBDINPUT[] up = new KBDINPUT[1];
+        up[0].type    = INPUT_KEYBOARD;
+        up[0].wVk     = 0;
+        up[0].wScan   = (ushort)c;
+        up[0].dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+        SendInputKbd(1, up, sz);
+    }
+
     public static void ClickAt(int x, int y) {
         // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 (-4):
         // all GetSystemMetrics / WindowFromPoint calls return physical pixels.
@@ -172,38 +207,19 @@ foreach ($char in $chars) {
     $i++
     $code = [int][char]$char
 
-    # Build SendKeys-safe representation
-    $sendKey = $null
-    switch ($char) {
-        '+'  { $sendKey = '{+}' }
-        '^'  { $sendKey = '{^}' }
-        '%'  { $sendKey = '{%}' }
-        '~'  { $sendKey = '{~}' }
-        '('  { $sendKey = '{(}' }
-        ')'  { $sendKey = '{)}' }
-        '{'  { $sendKey = '{{}' }
-        '}'  { $sendKey = '{}}' }
-        '['  { $sendKey = '{[}' }
-        ']'  { $sendKey = '{]}' }
-        default {
-            if ($code -eq 13) {
-                $sendKey = $null       # Skip CR - \r\n pairs only fire on \n
-            } elseif ($code -eq 10) {
-                $sendKey = '~'         # Enter (LF)
-            } elseif ($code -eq 9) {
-                $sendKey = '{TAB}'     # Tab
-            } else {
-                $sendKey = [string]$char
-            }
-        }
-    }
-
-    if ($null -ne $sendKey) {
-        try {
-            [System.Windows.Forms.SendKeys]::SendWait($sendKey)
-        } catch {
-            # Skip on error
-        }
+    if ($code -eq 13) {
+        # skip CR - \r\n pairs only fire on \n
+    } elseif ($code -eq 10) {
+        # Enter (LF) - use SendKeys so it fires a real Enter keypress
+        try { [System.Windows.Forms.SendKeys]::SendWait('~') } catch {}
+    } elseif ($code -eq 9) {
+        # Tab - use SendKeys
+        try { [System.Windows.Forms.SendKeys]::SendWait('{TAB}') } catch {}
+    } elseif ($code -ge 32) {
+        # All printable characters: use direct Unicode SendInput.
+        # This bypasses keyboard layout dead-key processing entirely,
+        # so "O never becomes O-umlaut, "U never becomes U-umlaut, etc.
+        [OxPasteWin32]::SendUnicode($char)
     }
 
     if ($charDelay -gt 0) {
