@@ -25,6 +25,8 @@ let settingsWindow = null;
 // State
 let overlayVisible = false;
 let typingPending  = null; // { text, mode } for capture -> typing handoff
+let isQuitting     = false;
+let pendingUpdate  = null; // { version, url } when a newer release exists
 
 // ---------- Auto-start (Windows registry via Electron) ----------
 function applyAutoStart(enable) {
@@ -33,6 +35,26 @@ function applyAutoStart(enable) {
     path: app.getPath('exe'),
     name: '0xpaste'
   });
+}
+
+// ---------- Quit ----------
+// The overlay is created with closable:false, which makes the close() that
+// app.quit() sends a no-op - the quit sequence never completes and the app
+// keeps running in the tray. Destroy every window explicitly so quit always
+// takes effect, and abort any in-flight typing first.
+function quitApp() {
+  if (isQuitting) return;
+  isQuitting = true;
+
+  try { typingEngine.cancel(); } catch (_) {}
+
+  if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy();
+  for (const win of captureWindows) {
+    if (win && !win.isDestroyed()) win.destroy();
+  }
+  if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.destroy();
+
+  app.quit();
 }
 
 // ---------- Overlay window ----------
@@ -412,6 +434,10 @@ function setupIPC() {
     openSettingsWindow();
   });
 
+  // Update notification: overlay asks on load, and opens the release page.
+  ipcMain.handle('update:get', () => pendingUpdate);
+  ipcMain.on('update:open', () => openReleasesPage(pendingUpdate && pendingUpdate.url));
+
   // Screen capture for WebGL glass lens - crops the primary display screenshot
   // to exactly the overlay panel area and returns it as a data URL.
   ipcMain.handle('screen:capture-overlay', async () => {
@@ -482,16 +508,21 @@ if (!gotLock) {
     createTray(
       toggleOverlay,
       openSettingsWindow,
-      () => { app.quit(); },
+      quitApp,
       () => { typingEngine.cancel(); }
     );
 
     // Register hotkey with persisted binding
     hotkey.registerHotkey(toggleOverlay, settings.hotkey);
 
-    // Check for updates in the background - silent on any error
-    checkForUpdates((version) => {
-      setUpdateAvailable(version, openReleasesPage);
+    // Check for updates in the background - silent on any error. Only fires the
+    // callback when a strictly newer release actually exists.
+    checkForUpdates((version, url) => {
+      pendingUpdate = { version, url: url || null };
+      setUpdateAvailable(version, () => openReleasesPage(pendingUpdate.url));
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.webContents.send('update:available', pendingUpdate);
+      }
     });
 
     clipboardMonitor.start((item) => {

@@ -2,30 +2,29 @@
 
 const Store = require('electron-store');
 
+// Schema ranges are a deliberate superset of every value older builds could
+// have stored, so a pre-existing config never fails validation on load. The
+// UI enforces the real, tighter ranges (initialDelay 1-4000, charDelay 1-200).
 const schema = {
   initialDelay: {
     type: 'number',
-    default: 25,
+    default: 1,
     minimum: 0,
     maximum: 10000
   },
   charDelay: {
     type: 'number',
-    default: 15,
-    minimum: 10,
+    default: 1,
+    minimum: 1,
     maximum: 1000
   },
   startWithWindows: {
     type: 'boolean',
     default: true
   },
-  typingSpeed: {
-    type: 'string',
-    default: 'xfast'
-  },
   maxHistory: {
     type: 'number',
-    default: 25,
+    default: 50,
     minimum: 10,
     maximum: 75
   },
@@ -55,11 +54,10 @@ const store = new Store({
   name: 'config',
   schema,
   defaults: {
-    initialDelay: 25,
-    charDelay: 15,
+    initialDelay: 1,
+    charDelay: 1,
     startWithWindows: true,
-    typingSpeed: 'xfast',
-    maxHistory: 25,
+    maxHistory: 50,
     hotkey: 'CommandOrControl+Space',
     accentColor: '#7C3AED',
     panelPosition: 'bottom-right',
@@ -68,15 +66,11 @@ const store = new Store({
   }
 });
 
-const SPEED_TO_DELAY = { slow: 100, medium: 50, fast: 15, xfast: 7 };
-
 function getSettings() {
-  const typingSpeed = store.get('typingSpeed');
   return {
     initialDelay: store.get('initialDelay'),
-    charDelay: SPEED_TO_DELAY[typingSpeed] ?? store.get('charDelay'),
+    charDelay: store.get('charDelay'),
     startWithWindows: store.get('startWithWindows'),
-    typingSpeed,
     maxHistory: store.get('maxHistory'),
     hotkey: store.get('hotkey'),
     accentColor: store.get('accentColor'),

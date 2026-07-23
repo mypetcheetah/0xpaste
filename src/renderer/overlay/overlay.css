@@ -224,6 +224,24 @@ html, body {
   justify-content: space-between;
 }
 
+/* App logo + wordmark */
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.app-logo {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 0 6px var(--accent-a40));
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -283,6 +301,84 @@ html, body {
   opacity: 0.5;
   user-select: none;
   /* window is movable:false - no drag region needed */
+}
+
+/* ---- Update banner ---- */
+.update-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 16px 0;
+  padding: 7px 10px;
+  background: var(--accent-a15);
+  border: 1px solid var(--accent-primary);
+  border-radius: 6px;
+  box-shadow: 0 0 12px var(--accent-a25);
+  flex-shrink: 0;
+  animation: updateIn 260ms ease-out;
+}
+
+.update-banner.visible {
+  display: flex;
+}
+
+@keyframes updateIn {
+  0%   { opacity: 0; transform: translateY(-6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.update-icon {
+  color: var(--accent-glow);
+  font-size: 12px;
+  text-shadow: 0 0 8px var(--accent-primary);
+}
+
+.update-text {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.update-text #update-version {
+  color: var(--accent-glow);
+  font-weight: 700;
+}
+
+.update-btn {
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 3px 9px;
+  transition: filter 120ms;
+  flex-shrink: 0;
+}
+
+.update-btn:hover {
+  filter: brightness(1.15);
+}
+
+.update-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 3px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.update-dismiss:hover {
+  color: var(--text-primary);
 }
 
 /* ---- Search Bar ---- */
@@ -581,6 +677,31 @@ html, body {
   gap: 5px;
 }
 
+/* Grouped settings with a small section heading for hierarchy */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.settings-group:last-child {
+  margin-bottom: 2px;
+}
+
+.group-heading {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent-glow);
+  opacity: 0.75;
+  padding: 0 2px 1px;
+  border-bottom: 1px solid var(--border-default);
+  margin-bottom: 2px;
+  user-select: none;
+}
+
 .settings-row {
   display: flex;
   align-items: center;
@@ -650,13 +771,72 @@ html, body {
   background: var(--accent-a15);
 }
 
-/* Initial delay slider */
-#delay-slider {
+/* Range sliders (typing speed + initial delay) */
+#delay-slider,
+#speed-slider {
   width: 100%;
   height: 4px;
   accent-color: var(--accent-primary);
   cursor: pointer;
-  margin: 2px 0;
+  margin: 4px 0 2px;
+}
+
+/* Slider end labels */
+.slider-ends {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-placeholder);
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+
+/* Exact number input next to the initial-delay slider */
+.num-wrap {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+#delay-input {
+  width: 52px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  color: var(--accent-glow);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: right;
+  padding: 2px 5px;
+  outline: none;
+  transition: border-color 150ms;
+  -moz-appearance: textfield;
+}
+
+#delay-input::-webkit-outer-spin-button,
+#delay-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+#delay-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.num-unit {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-secondary);
+}
+
+/* Small explanatory hint under a control (e.g. type-mode description) */
+.settings-hint {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.35;
+  color: var(--text-placeholder);
+  margin-top: 2px;
 }
 
 /* Toggle switch */
