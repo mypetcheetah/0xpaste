@@ -11,7 +11,7 @@ Copy anything. Find it later. Type it anywhere, even where Ctrl+V doesn't work.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-26-47848F?style=flat-square&logo=electron&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.0.5-7C3AED?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.1.0-7C3AED?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-22C55E?style=flat-square)
 ![Built with JS](https://img.shields.io/badge/built%20with-vanilla%20JS-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
 
@@ -43,8 +43,9 @@ This means it works in places where normal Ctrl+V is blocked: **remote desktop s
 | 📌 **Pin items** | Prevent important items from being rotated out of history. |
 | 🔒 **Password masking** | Items that look like passwords are auto-detected and masked by default - shows first 4 chars + blurred dots. Eye icon reveals full text. |
 | 🚫 **Typing killswitch** | Move your mouse more than 80px during typing to cancel immediately - works in RDP where keyboard shortcuts are intercepted. |
-| ↵ **Auto-type Enter** | Optional setting: automatically sends Enter after every paste - useful for commands. |
-| ⚡ **4 typing speeds** | Slow / Med / Fast / X-Fast (7ms per key) with configurable initial delay. |
+| ↵ **Auto-type Enter** | Off: the paste stays on one line and Enter is never pressed - safe in chat apps. On: line breaks become real Enters, plus one after the last character. |
+| ⚡ **Adjustable speed** | Sliders for keystroke delay (1-150ms) and initial delay (1-4000ms), both down to 1ms. |
+| ⬆ **Update notification** | Checks GitHub on start and shows an in-app banner plus a tray entry, but only when a newer stable release actually exists. |
 | ⚙️ **Full settings panel** | All settings accessible from inside the overlay - no separate window needed. |
 | 🎨 **Live accent color** | Pick any color - the entire UI including glows, toggles, and borders update instantly. |
 | 🖼️ **4 themes** | Default dark, White office, Glass, Dark office. |
@@ -114,11 +115,11 @@ Open settings by clicking the gear icon inside the overlay.
 
 | Setting | Options | Default | What it does |
 |---------|---------|---------|--------------|
-| **Typing speed** | Slow / Med / Fast / X-Fast | X-Fast | Delay between keystrokes: 100ms / 50ms / 15ms / 7ms |
-| **Initial delay** | 0 – 4000ms slider | 25ms | Wait before first keystroke - gives you time to focus the target field |
-| **Auto type Enter** | Toggle | Off | Automatically sends Enter after every paste |
+| **Typing speed** | 1 – 150ms slider | 1ms | Delay between keystrokes - lower is faster |
+| **Initial delay** | 1 – 4000ms slider + exact field | 1ms | Wait after clicking the target, before the first keystroke |
+| **Auto type Enter** | Toggle | Off | Off: everything on one line, Enter is never pressed. On: line breaks become Enters, plus one at the end |
 | **Start with Windows** | Toggle | On | Launch 0xpaste automatically at login |
-| **Max history** | 10 / 25 / 50 / 75 | 25 | Items kept in history - oldest unpinned removed when full |
+| **Max history** | 10 / 25 / 50 / 75 | 50 | Items kept in history - oldest unpinned removed when full |
 | **Hotkey** | Any combo with modifier | `Ctrl + Space` | Press `set` then your desired key combo |
 | **Accent color** | Color picker | `#7C3AED` | Primary UI color - all elements including glows update live |
 | **Panel position** | ↖ ↗ ↙ ↘ | ↘ | Corner of the primary display to snap to |
@@ -175,7 +176,7 @@ npm start
 npm run dist
 ```
 
-The installer outputs to `dist/0xpaste Setup 1.0.5.exe`.
+The installer outputs to `dist/0xpaste Setup 1.1.0.exe`.
 
 > **Run `npm start` from PowerShell or cmd.exe, not Git Bash.**
 > In Git Bash/MSYS2, `require('electron')` resolves the npm package path instead of the binary.
@@ -223,6 +224,16 @@ The flow for a click-to-type operation:
 4. Main process reads `getCursorScreenPoint()` (DIP coords) → converts via `dipToScreenPoint()` (physical pixels)
 5. PowerShell moves the cursor, clicks, and types the text keystroke by keystroke
 6. Mouse movement monitor runs in parallel - if mouse moves >80px, the PowerShell process is killed immediately
+
+### Special characters and dead keys
+
+On Dutch and other EU keyboard layouts, `^` `` ` `` `'` `~` `"` are *dead keys*: pressing one produces nothing until the next key, which it then tries to combine with. Typed naively, `^e` silently becomes `ê` and the standalone accent disappears.
+
+0xpaste resolves each dead key immediately by sending the character, then a **digit**, then a backspace. A digit shares no accent combination with any dead key, so Windows always emits both the standalone accent and the digit; the backspace then removes only the digit. A space cannot be used here: on a real dead-key layout the accent swallows the space, after which the backspace eats the accent itself and the character vanishes.
+
+The result is identical output on a plain layout and on a dead-key layout, in local apps and in browser-based VM consoles alike. All 94 printable ASCII characters type through 1:1.
+
+> Keystrokes deliberately go through `SendKeys`, which lives inside a Microsoft-signed .NET assembly. Injecting raw `SendInput` keystrokes from runtime-compiled code reads as a keylogger pattern to endpoint security tools and gets flagged; the `SendKeys` route does not.
 
 ---
 

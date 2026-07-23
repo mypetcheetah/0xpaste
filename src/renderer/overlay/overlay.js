@@ -8,7 +8,7 @@ const api = window.electronAPI;
 
 // ---- State ----
 let history = [];
-let maxHistory = 25;
+let maxHistory = 50;
 let searchQuery = '';
 let selectedItemId = null;
 let clearConfirmTimer = null;
@@ -154,6 +154,32 @@ api.onTypingDone(({ cancelled } = {}) => {
 api.onAccentColor((color) => {
   applyAccentColor(color);
 });
+
+// ============================================================
+// Update notification banner - shown only when a newer release exists
+// ============================================================
+const updateBanner = document.getElementById('update-banner');
+
+function showUpdateBanner(info) {
+  if (!info || !info.version || !updateBanner) return;
+  const vEl = document.getElementById('update-version');
+  if (vEl) vEl.textContent = info.version;
+  updateBanner.classList.add('visible');
+}
+
+(function initUpdateBanner() {
+  if (!updateBanner) return;
+  const dl      = document.getElementById('update-download-btn');
+  const dismiss = document.getElementById('update-dismiss-btn');
+  if (dl)      dl.addEventListener('click', () => api.openUpdate());
+  if (dismiss) dismiss.addEventListener('click', () => updateBanner.classList.remove('visible'));
+
+  // Push: main sends this if the check completes while the overlay is open.
+  api.onUpdateAvailable((info) => showUpdateBanner(info));
+
+  // Pull: in case the check already finished before this renderer loaded.
+  api.getUpdate().then((info) => { if (info) showUpdateBanner(info); }).catch(() => {});
+})();
 
 // ============================================================
 // Search
@@ -602,15 +628,27 @@ function cancelHotkeyCapture() {
 // Settings - reset to defaults
 // ============================================================
 const DEFAULTS = {
-  typingSpeed:    'xfast',
-  initialDelay:   25,
+  charDelay:      1,
+  initialDelay:   1,
+  autoEnter:      false,
   startWithWindows: true,
-  maxHistory:     25,
+  maxHistory:     50,
   hotkey:         'CommandOrControl+Space',
   accentColor:    '#7C3AED',
   panelPosition:  'bottom-right',
   theme:          'default'
 };
+
+const CHAR_DELAY_MIN = 1;
+const CHAR_DELAY_MAX = 150;
+const INIT_DELAY_MIN = 1;
+const INIT_DELAY_MAX = 4000;
+
+function clampInt(val, min, max, fallback) {
+  const n = parseInt(val, 10);
+  if (isNaN(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
 
 function setSegGroup(groupId, val) {
   const group = document.getElementById(groupId);
@@ -624,18 +662,27 @@ resetBtn.addEventListener('click', () => {
   // Persist all defaults
   Object.entries(DEFAULTS).forEach(([key, val]) => api.updateSetting(key, val));
 
-  // Update UI controls to reflect defaults
-  setSegGroup('speed-group', DEFAULTS.typingSpeed);
+  // Typing speed (charDelay)
+  const speedSlider = document.getElementById('speed-slider');
+  const speedValue  = document.getElementById('speed-value');
+  if (speedSlider) speedSlider.value = DEFAULTS.charDelay;
+  if (speedValue)  speedValue.textContent = `${DEFAULTS.charDelay}ms/char`;
 
+  // Initial delay (slider + number)
   const delaySlider = document.getElementById('delay-slider');
-  const delayValue  = document.getElementById('delay-value');
-  if (delaySlider) { delaySlider.value = DEFAULTS.initialDelay; }
-  if (delayValue)  { delayValue.textContent = `${DEFAULTS.initialDelay}ms`; }
+  const delayInput  = document.getElementById('delay-input');
+  if (delaySlider) delaySlider.value = DEFAULTS.initialDelay;
+  if (delayInput)  delayInput.value  = DEFAULTS.initialDelay;
+
+  // Auto enter
+  const autoEnterToggle = document.getElementById('auto-enter-toggle');
+  if (autoEnterToggle) autoEnterToggle.checked = DEFAULTS.autoEnter;
 
   const winToggle = document.getElementById('start-windows-toggle');
   if (winToggle) winToggle.checked = DEFAULTS.startWithWindows;
 
   setSegGroup('history-group', DEFAULTS.maxHistory);
+  maxHistory = DEFAULTS.maxHistory;
 
   const hotkeyDisplay = document.getElementById('hotkey-display');
   if (hotkeyDisplay) hotkeyDisplay.textContent = acceleratorToDisplay(DEFAULTS.hotkey);
@@ -674,27 +721,51 @@ function initSegGroup(groupId, currentVal, onChange) {
 // Settings - initialise all controls from stored settings
 // ============================================================
 function initSettings(settings) {
-  // Typing speed
-  initSegGroup('speed-group', settings.typingSpeed, (val) => {
-    api.updateSetting('typingSpeed', val);
-  });
+  // Typing speed = charDelay in ms (left = fast/low delay, right = slow/high delay)
+  const speedSlider = document.getElementById('speed-slider');
+  const speedValue  = document.getElementById('speed-value');
+  if (speedSlider) {
+    const cd = clampInt(settings.charDelay, CHAR_DELAY_MIN, CHAR_DELAY_MAX, DEFAULTS.charDelay);
+    speedSlider.value = cd;
+    speedValue.textContent = `${cd}ms/char`;
 
-  // Initial delay slider
+    let speedTimer = null;
+    speedSlider.addEventListener('input', () => {
+      const val = clampInt(speedSlider.value, CHAR_DELAY_MIN, CHAR_DELAY_MAX, DEFAULTS.charDelay);
+      speedValue.textContent = `${val}ms/char`;
+      clearTimeout(speedTimer);
+      speedTimer = setTimeout(() => api.updateSetting('charDelay', val), 250);
+    });
+  }
+
+  // Initial delay: slider + exact number input, kept in sync (1 - 4000ms)
   const delaySlider = document.getElementById('delay-slider');
-  const delayValue  = document.getElementById('delay-value');
-  if (delaySlider) {
-    delaySlider.value = settings.initialDelay;
-    delayValue.textContent = `${settings.initialDelay}ms`;
+  const delayInput  = document.getElementById('delay-input');
+  if (delaySlider && delayInput) {
+    const id0 = clampInt(settings.initialDelay, INIT_DELAY_MIN, INIT_DELAY_MAX, DEFAULTS.initialDelay);
+    delaySlider.value = id0;
+    delayInput.value  = id0;
 
     let delayTimer = null;
-    delaySlider.addEventListener('input', () => {
-      const val = parseInt(delaySlider.value, 10);
-      delayValue.textContent = `${val}ms`;
+    const commitDelay = (val) => {
       clearTimeout(delayTimer);
-      delayTimer = setTimeout(() => {
-        api.updateSetting('initialDelay', val);
-      }, 300);
+      delayTimer = setTimeout(() => api.updateSetting('initialDelay', val), 250);
+    };
+
+    delaySlider.addEventListener('input', () => {
+      const val = clampInt(delaySlider.value, INIT_DELAY_MIN, INIT_DELAY_MAX, DEFAULTS.initialDelay);
+      delayInput.value = val;
+      commitDelay(val);
     });
+
+    delayInput.addEventListener('change', () => {
+      const val = clampInt(delayInput.value, INIT_DELAY_MIN, INIT_DELAY_MAX, DEFAULTS.initialDelay);
+      delayInput.value  = val;
+      delaySlider.value = val;
+      commitDelay(val);
+    });
+    // Stop the global keydown handler from swallowing digits typed in the field
+    delayInput.addEventListener('keydown', (e) => e.stopPropagation());
   }
 
   // Auto enter

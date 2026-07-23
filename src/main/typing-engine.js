@@ -3,10 +3,30 @@
 /**
  * typing-engine.js
  *
- * Uses PowerShell + System.Windows.Forms.SendKeys for character-by-character
- * keyboard simulation. No native module compilation required.
+ * Character-by-character keyboard simulation via PowerShell +
+ * System.Windows.Forms.SendKeys. Typing runs entirely through SendKeys, which
+ * lives inside a Microsoft-signed .NET assembly - the same path v1.0.5 used and
+ * the one that stays clear of Cortex XDR (unlike raw SendInput keystroke
+ * injection from runtime-compiled code, which reads as a keylogger pattern).
  *
- * Mouse click uses Win32 SetCursorPos + mouse_event via Add-Type in PowerShell.
+ * The mouse focus-click still uses Win32 SendInput via Add-Type - byte-for-byte
+ * the v1.0.5 code, which never triggered an alert (it moves the mouse, it does
+ * not type).
+ *
+ * Dead keys (circumflex, backtick, apostrophe, tilde, quote) are resolved with
+ * SendKeys itself: send the character, then a DIGIT, then a backspace. A digit
+ * has no composition with any accent, so Windows always emits both the spacing
+ * accent and the digit - on a real dead-key layout and on a plain one alike.
+ * Using a space here would break on true dead-key layouts, because accent +
+ * space yields the accent and swallows the space, after which the backspace
+ * eats the accent itself and the character vanishes.
+ *
+ * Enter handling follows the autoEnter setting exactly:
+ *   off - a newline in the text is typed as a space, so the paste stays on one
+ *         line and Enter is NEVER pressed (important in chat apps, where Enter
+ *         would send the message).
+ *   on  - newlines are typed as real Enters and one final Enter is sent after
+ *         the last character, in the SAME session while the target has focus.
  */
 
 const { spawn } = require('child_process');
@@ -15,13 +35,16 @@ const fs   = require('fs');
 const os   = require('os');
 
 // ---- Embedded PowerShell script ----
-// Receives: -px, -py (screen coords), -textFile (UTF-8 temp file), -charDelay (ms)
+// Params: -px,-py (screen coords), -textFile (UTF-8), -charDelay (ms),
+//         -initialDelay (ms, waited after focus), -autoEnter (0|1)
 const PS_SCRIPT = String.raw`
 param(
     [int]$px,
     [int]$py,
     [string]$textFile,
-    [int]$charDelay
+    [int]$charDelay,
+    [int]$initialDelay,
+    [int]$autoEnter
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -37,7 +60,7 @@ public class OxPasteWin32 {
     const int SM_CXVIRTUALSCREEN  = 78;
     const int SM_CYVIRTUALSCREEN  = 79;
 
-    // SendInput constants
+    // SendInput constants (mouse only)
     const uint INPUT_MOUSE              = 0;
     const uint MOUSEEVENTF_MOVE        = 0x0001;
     const uint MOUSEEVENTF_LEFTDOWN    = 0x0002;
@@ -153,75 +176,91 @@ public class OxPasteWin32 {
 }
 "@
 
-# Click the target to focus it
+# Focus the target, then wait the configured settle time before the first key.
 [OxPasteWin32]::ClickAt($px, $py)
-Start-Sleep -Milliseconds 200
+if ($initialDelay -gt 0) { Start-Sleep -Milliseconds $initialDelay }
 
-# Read text from temp file (handles all Unicode correctly)
-$text = [System.IO.File]::ReadAllText($textFile, [System.Text.Encoding]::UTF8)
-
+# Read text (handles all Unicode correctly) and drop CR so CRLF fires one Enter.
+$text  = [System.IO.File]::ReadAllText($textFile, [System.Text.Encoding]::UTF8)
 $chars = $text.ToCharArray() | Where-Object { [int]$_ -ne 13 }
 $total = $chars.Count
 if ($total -eq 0) {
+    if ($autoEnter -eq 1) {
+        Start-Sleep -Milliseconds 30
+        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    }
     Write-Host "DONE"
     exit
 }
 
+# Dead-key character codes on NL / EU layouts: circumflex 94, backtick 96,
+# apostrophe 39, tilde 126, quote 34.
 $i = 0
 foreach ($char in $chars) {
     $i++
     $code = [int][char]$char
 
-    # Build SendKeys-safe representation
+    # Map the character to its SendKeys representation and note whether it is a
+    # dead key that must be resolved with a trailing space + backspace.
     $sendKey = $null
-    switch ($char) {
-        '+'  { $sendKey = '{+}' }
-        '^'  { $sendKey = '{^}' }
-        '%'  { $sendKey = '{%}' }
-        '~'  { $sendKey = '{~}' }
-        '('  { $sendKey = '{(}' }
-        ')'  { $sendKey = '{)}' }
-        '{'  { $sendKey = '{{}' }
-        '}'  { $sendKey = '{}}' }
-        '['  { $sendKey = '{[}' }
-        ']'  { $sendKey = '{]}' }
-        default {
-            if ($code -eq 13) {
-                $sendKey = $null
-            } elseif ($code -eq 10) {
-                $sendKey = '~'
-            } elseif ($code -eq 9) {
-                $sendKey = '{TAB}'
-            } else {
-                $sendKey = [string]$char
-            }
-        }
+    $isDead  = $false
+    switch ($code) {
+        # Line break. With auto-enter OFF the paste must never press Enter, so
+        # a newline becomes a space and everything lands on a single line.
+        # With auto-enter ON the line breaks are typed as real Enters.
+        10  { if ($autoEnter -eq 1) { $sendKey = '{ENTER}' } else { $sendKey = ' ' } }
+        9   { $sendKey = '{TAB}' }                         # Tab
+        94  { $sendKey = '{^}'; $isDead = $true }          # ^
+        126 { $sendKey = '{~}'; $isDead = $true }          # ~
+        34  { $sendKey = '"';  $isDead = $true }           # "
+        39  { $sendKey = [string][char]39;  $isDead = $true }  # '
+        96  { $sendKey = [string][char]96;  $isDead = $true }  # backtick
+        43  { $sendKey = '{+}' }                           # +
+        37  { $sendKey = '{%}' }                           # %
+        40  { $sendKey = '{(}' }                           # (
+        41  { $sendKey = '{)}' }                           # )
+        123 { $sendKey = '{{}' }                           # {
+        125 { $sendKey = '{}}' }                           # }
+        91  { $sendKey = '{[}' }                           # [
+        93  { $sendKey = '{]}' }                           # ]
+        default { $sendKey = [string]$char }
     }
 
     if ($null -ne $sendKey) {
         try {
-            if ($char -eq '"') {
-                # " is a dead key on Dutch/EU keyboard layouts - "O -> O-umlaut etc.
-                # Fix: send " then space (resolves dead key -> outputs '" '),
-                # then backspace to erase the trailing space.
-                [System.Windows.Forms.SendKeys]::SendWait('"')
-                [System.Windows.Forms.SendKeys]::SendWait(' ')
+            if ($isDead) {
+                # Resolve the dead key with a character it can NEVER combine
+                # with (a digit), then delete that character again.
+                #
+                # Why not a space: on a real dead-key layout, accent + space
+                # yields the accent and SWALLOWS the space, so the backspace
+                # then eats the accent itself and the character disappears.
+                # A digit has no composition with any accent, so Windows always
+                # emits BOTH the spacing accent and the digit - in every
+                # environment, dead-key layout or not. Backspace then removes
+                # only the digit and the accent survives.
+                [System.Windows.Forms.SendKeys]::SendWait($sendKey)
+                [System.Windows.Forms.SendKeys]::SendWait('0')
                 [System.Windows.Forms.SendKeys]::SendWait('{BACKSPACE}')
             } else {
                 [System.Windows.Forms.SendKeys]::SendWait($sendKey)
             }
         } catch {
-            # Skip on error
+            # Skip a single problematic character rather than aborting.
         }
     }
 
-    if ($charDelay -gt 0) {
-        Start-Sleep -Milliseconds $charDelay
-    }
+    if ($charDelay -gt 0) { Start-Sleep -Milliseconds $charDelay }
 
     $pct = [int]([Math]::Floor(($i / $total) * 100))
     Write-Host "PROGRESS:$pct"
     [Console]::Out.Flush()
+}
+
+# Trailing Enter in the SAME session, while the target still has focus.
+if ($autoEnter -eq 1) {
+    Start-Sleep -Milliseconds 30
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
 }
 
 Write-Host "DONE"
@@ -236,10 +275,6 @@ const state = {
   childProcess:     null,
   progressCallback: null
 };
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 // ---- Main entry point ----
 async function startTyping(text, x, y, settings, progressCallback) {
@@ -256,13 +291,8 @@ async function startTyping(text, x, y, settings, progressCallback) {
     fs.writeFileSync(tmpText,   text,      'utf8');
     fs.writeFileSync(tmpScript, PS_SCRIPT, 'utf8');
 
-    // Initial delay before typing
-    if (initialDelay > 0) {
-      await sleep(initialDelay);
-    }
     if (state.cancelled) return;
 
-    // Spawn PowerShell to click + type
     await new Promise((resolve) => {
       const psArgs = [
         '-NonInteractive',
@@ -272,7 +302,9 @@ async function startTyping(text, x, y, settings, progressCallback) {
         '-px', String(x),
         '-py', String(y),
         '-textFile', tmpText,
-        '-charDelay', String(charDelay)
+        '-charDelay', String(charDelay),
+        '-initialDelay', String(initialDelay),
+        '-autoEnter', autoEnter ? '1' : '0'
       ];
 
       const ps = spawn('powershell.exe', psArgs, {
@@ -283,51 +315,30 @@ async function startTyping(text, x, y, settings, progressCallback) {
       state.childProcess = ps;
 
       let buf = '';
-
       ps.stdout.on('data', (chunk) => {
         buf += chunk.toString();
         const lines = buf.split('\n');
-        buf = lines.pop(); // Keep incomplete line in buffer
-
+        buf = lines.pop();
         for (const line of lines) {
           const t = line.trim();
           if (t.startsWith('PROGRESS:')) {
             const pct = parseInt(t.slice(9), 10);
-            if (!isNaN(pct) && state.progressCallback) {
-              state.progressCallback(pct);
-            }
+            if (!isNaN(pct) && state.progressCallback) state.progressCallback(pct);
           }
         }
       });
 
       ps.stderr.on('data', (d) => {
-        console.error('[typing-engine] PS stderr:', d.toString().slice(0, 200));
+        console.error('[typing-engine] PS stderr:', d.toString().slice(0, 300));
       });
 
-      ps.on('close', () => {
-        state.childProcess = null;
-        resolve();
-      });
-
+      ps.on('close', () => { state.childProcess = null; resolve(); });
       ps.on('error', (err) => {
         console.error('[typing-engine] spawn error:', err.message);
         state.childProcess = null;
         resolve();
       });
     });
-
-    // Send Enter after typing if autoEnter is enabled
-    if (autoEnter && !state.cancelled) {
-      await new Promise((resolve) => {
-        const ps = spawn('powershell.exe', [
-          '-NonInteractive', '-NoProfile', '-ExecutionPolicy', 'Bypass',
-          '-Command',
-          'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")'
-        ], { windowsHide: true, stdio: 'ignore' });
-        ps.on('close', resolve);
-        ps.on('error', resolve);
-      });
-    }
 
   } finally {
     try { fs.unlinkSync(tmpText);   } catch (_) {}

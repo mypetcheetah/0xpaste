@@ -54,8 +54,10 @@ async function main() {
   const buffers = [];
 
   for (const size of sizes) {
+    // Transparent padding - keeps the logo's own alpha so the tray, taskbar
+    // and installer show the shape itself instead of a dark square behind it.
     const buf = await sharp(SRC_PNG)
-      .resize(size, size, { fit: 'contain', background: { r: 13, g: 13, b: 15, alpha: 1 } })
+      .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer();
     buffers.push(buf);

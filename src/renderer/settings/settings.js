@@ -35,14 +35,14 @@ function clamp(val, min, max) {
 }
 
 initialDelayInput.addEventListener('change', () => {
-  const val = clamp(parseInt(initialDelayInput.value, 10) || 0, 0, 10000);
+  const val = clamp(parseInt(initialDelayInput.value, 10) || 120, 1, 4000);
   initialDelayInput.value = val;
   api.updateSetting('initialDelay', val);
   showSaved();
 });
 
 charDelayInput.addEventListener('change', () => {
-  const val = clamp(parseInt(charDelayInput.value, 10) || 50, 10, 1000);
+  const val = clamp(parseInt(charDelayInput.value, 10) || 10, 1, 200);
   charDelayInput.value = val;
   api.updateSetting('charDelay', val);
   showSaved();

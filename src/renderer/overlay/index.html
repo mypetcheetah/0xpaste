@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' file: data:">
   <title>0xpaste</title>
   <link rel="stylesheet" href="overlay.css">
 </head>
@@ -22,7 +22,10 @@
       <!-- Header -->
       <header class="overlay-header">
         <div class="header-top">
-          <div class="app-title">0xpaste</div>
+          <div class="app-brand">
+            <img class="app-logo" src="../../assets/icon.png" alt="">
+            <div class="app-title">0xpaste</div>
+          </div>
           <div class="header-actions">
             <button class="reset-btn" id="reset-defaults-btn">[reset]</button>
             <button id="settings-btn" class="btn-settings" title="Settings">
@@ -38,6 +41,14 @@
           <div class="header-hotkey" id="header-hotkey">toggle: ctrl + space</div>
         </div>
       </header>
+
+      <!-- Update banner (hidden unless a newer release exists) -->
+      <div id="update-banner" class="update-banner">
+        <span class="update-icon">⬆</span>
+        <span class="update-text">update <span id="update-version">?</span> available</span>
+        <button id="update-download-btn" class="update-btn">download</button>
+        <button id="update-dismiss-btn" class="update-dismiss" title="Dismiss">[x]</button>
+      </div>
 
       <!-- Clipboard view -->
       <div id="clipboard-view">
@@ -71,47 +82,50 @@
       <!-- Settings view (hidden by default) -->
       <div id="settings-view">
 
-        <div class="settings-section">
+        <!-- ===== Typing ===== -->
+        <div class="settings-group">
+          <div class="group-heading">// typing</div>
 
           <!-- Typing speed -->
-          <div class="settings-row">
-            <span class="settings-label">// typing speed</span>
-            <div class="seg-group" id="speed-group">
-              <button class="seg-btn" data-val="slow">slow</button>
-              <button class="seg-btn" data-val="medium">med</button>
-              <button class="seg-btn" data-val="fast">fast</button>
-              <button class="seg-btn" data-val="xfast">x-fast</button>
+          <div class="settings-row settings-col">
+            <div class="settings-row-hdr">
+              <span class="settings-label">// typing speed</span>
+              <span class="settings-value" id="speed-value">1ms/char</span>
             </div>
+            <input type="range" id="speed-slider" min="1" max="150" step="1" value="1">
+            <div class="slider-ends"><span>fast</span><span>slow</span></div>
           </div>
 
           <!-- Initial delay -->
           <div class="settings-row settings-col">
             <div class="settings-row-hdr">
               <span class="settings-label">// initial delay</span>
-              <span class="settings-value" id="delay-value">2000ms</span>
+              <div class="num-wrap">
+                <input type="number" id="delay-input" min="1" max="4000" step="1" value="1">
+                <span class="num-unit">ms</span>
+              </div>
             </div>
-            <input type="range" id="delay-slider" min="0" max="4000" step="100" value="2000">
+            <input type="range" id="delay-slider" min="1" max="4000" step="1" value="1">
+            <div class="slider-ends"><span>1ms</span><span>4000ms</span></div>
           </div>
 
           <!-- Auto enter -->
-          <div class="settings-row">
-            <span class="settings-label">// auto type enter</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="auto-enter-toggle">
-              <span class="toggle-slider"></span>
-            </label>
+          <div class="settings-row settings-col">
+            <div class="settings-row-hdr">
+              <span class="settings-label">// auto type enter</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="auto-enter-toggle">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="settings-hint">off: one line, never enter &nbsp;/&nbsp; on: line breaks + enter at end</div>
           </div>
+        </div>
 
-          <!-- Start with Windows -->
-          <div class="settings-row">
-            <span class="settings-label">// start with windows</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="start-windows-toggle">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
+        <!-- ===== Clipboard ===== -->
+        <div class="settings-group">
+          <div class="group-heading">// clipboard</div>
 
-          <!-- Max history -->
           <div class="settings-row">
             <span class="settings-label">// max history</span>
             <div class="seg-group" id="history-group">
@@ -121,34 +135,27 @@
               <button class="seg-btn" data-val="75">75</button>
             </div>
           </div>
+        </div>
 
-          <!-- Hotkey -->
-          <div class="settings-row">
-            <span class="settings-label">// hotkey</span>
-            <div class="hotkey-wrap">
-              <span class="hotkey-display" id="hotkey-display">ctrl + -</span>
-              <button class="hotkey-set-btn" id="hotkey-capture-btn">set</button>
-            </div>
-          </div>
+        <!-- ===== Appearance ===== -->
+        <div class="settings-group">
+          <div class="group-heading">// appearance</div>
 
-          <!-- Accent color -->
-          <div class="settings-row">
-            <span class="settings-label">// accent color</span>
-            <input type="color" id="accent-color-input" value="#7C3AED">
-          </div>
-
-          <!-- Theme -->
           <div class="settings-row">
             <span class="settings-label">// theme</span>
             <div class="seg-group" id="theme-group">
-              <button class="seg-btn" data-val="default">default</button>
+              <button class="seg-btn" data-val="default">dark+</button>
               <button class="seg-btn" data-val="white">white</button>
               <button class="seg-btn" data-val="dark">dark</button>
               <button class="seg-btn" data-val="glass">glass</button>
             </div>
           </div>
 
-          <!-- Panel position -->
+          <div class="settings-row">
+            <span class="settings-label">// accent color</span>
+            <input type="color" id="accent-color-input" value="#7C3AED">
+          </div>
+
           <div class="settings-row">
             <span class="settings-label">// panel position</span>
             <div class="seg-group" id="position-group">
@@ -158,7 +165,27 @@
               <button class="seg-btn" data-val="bottom-right" title="Bottom right">↘</button>
             </div>
           </div>
+        </div>
 
+        <!-- ===== General ===== -->
+        <div class="settings-group">
+          <div class="group-heading">// general</div>
+
+          <div class="settings-row">
+            <span class="settings-label">// hotkey</span>
+            <div class="hotkey-wrap">
+              <span class="hotkey-display" id="hotkey-display">ctrl + space</span>
+              <button class="hotkey-set-btn" id="hotkey-capture-btn">set</button>
+            </div>
+          </div>
+
+          <div class="settings-row">
+            <span class="settings-label">// start with windows</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="start-windows-toggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         </div>
 
       </div><!-- /settings-view -->

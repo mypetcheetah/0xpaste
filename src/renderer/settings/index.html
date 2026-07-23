@@ -27,7 +27,7 @@
             <div class="setting-desc">Wait time after clicking target before first keystroke</div>
           </div>
           <div class="setting-control" style="display:flex;align-items:center">
-            <input type="number" class="num-input" id="initial-delay" min="0" max="10000" step="100">
+            <input type="number" class="num-input" id="initial-delay" min="1" max="4000" step="1">
             <span class="input-unit">ms</span>
           </div>
         </div>
@@ -38,7 +38,7 @@
             <div class="setting-desc">Pause between each individual keystroke</div>
           </div>
           <div class="setting-control" style="display:flex;align-items:center">
-            <input type="number" class="num-input" id="char-delay" min="10" max="1000" step="10">
+            <input type="number" class="num-input" id="char-delay" min="1" max="200" step="1">
             <span class="input-unit">ms</span>
           </div>
         </div>
@@ -54,7 +54,7 @@
             <div class="setting-desc">Global shortcut to show / hide the clipboard panel</div>
           </div>
           <div class="setting-control">
-            <span class="hotkey-display">Ctrl + -</span>
+            <span class="hotkey-display">Ctrl + Space</span>
           </div>
         </div>
       </div>
@@ -87,7 +87,7 @@
           <div class="about-title">0xpaste</div>
           <div class="about-version" id="about-version">v1.0.0</div>
           <div class="about-desc">
-            Clipboard history manager with character-by-character SendKeys typing.<br>
+            Clipboard history manager with character-by-character SendInput typing.<br>
             No paste events - types directly at the OS level.
           </div>
           <a class="about-link" href="https://github.com/0xpaste/0xpaste" target="_blank">

@@ -22,6 +22,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateSetting: (key, value) => ipcRenderer.send('settings:update', { key, value }),
   hotkeyCapture: (active) => ipcRenderer.send('hotkey:capture', { active }),
 
+  // Updates
+  getUpdate: () => ipcRenderer.invoke('update:get'),
+  openUpdate: () => ipcRenderer.send('update:open'),
+
   // Listeners
   onNewItem: (cb) => ipcRenderer.on('clipboard:new-item', (_, item) => cb(item)),
   onInitialHistory: (cb) => ipcRenderer.on('clipboard:initial-history', (_, history) => cb(history)),
@@ -31,6 +35,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTypingProgress: (cb) => ipcRenderer.on('typing:progress', (_, percent) => cb(percent)),
   onTypingDone: (cb) => ipcRenderer.on('typing:done', (_, data) => cb(data)),
   onAccentColor: (cb) => ipcRenderer.on('settings:accent-color', (_, color) => cb(color)),
+  onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_, data) => cb(data)),
 
   // Glass theme: capture screenshot of the area behind the overlay panel
   captureBackground: () => ipcRenderer.invoke('screen:capture-overlay'),
