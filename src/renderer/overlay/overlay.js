@@ -58,11 +58,12 @@ settingsBtn.addEventListener('click', () => setSettingsView(!settingsVisible));
 // ============================================================
 // Dock: hover the bar to open, move away to close
 // ============================================================
-// The window itself is always there, parked against the left edge and
-// click-through while collapsed. Main flips it to interactive when this
-// renderer asks to expand, so the policy lives here and the window state
-// lives there - they can never disagree because main echoes every change
-// back through dock:set-expanded.
+// The window is always there, parked against the left edge and click-through
+// while collapsed. A click-through window receives no mouse messages at all,
+// so main watches the real cursor and decides when to open. This side decides
+// when it is safe to close, because only it knows whether a drag is in flight
+// or a button is being held. Main echoes every state change back through
+// dock:set-expanded, so the window state and the visuals cannot disagree.
 
 const GEO = window.DOCK_GEO;
 
@@ -81,16 +82,8 @@ let expanded      = false;
 let pinned        = false;
 let peeking       = false;
 let pointerDown   = false;
-let armTimer      = null;
 let peekTimer     = null;
 let collapseTimer = null;
-
-// The bar sits against the left edge, vertically centred in the window.
-function inTabZone(x, y) {
-  const midY  = window.innerHeight / 2;
-  const halfH = (GEO.TAB_H / 2) + GEO.HOT_PAD_Y;
-  return x <= GEO.TAB_W + GEO.HOT_PAD_X && y >= midY - halfH && y <= midY + halfH;
-}
 
 // Panel rect inside the window, with slack so a brief overshoot while
 // reaching for a control does not slam it shut.
@@ -105,31 +98,6 @@ function endPeek() {
   peeking = false;
 }
 
-function disarm() {
-  if (armTimer) { clearTimeout(armTimer); armTimer = null; }
-  root.classList.remove('armed');
-}
-
-// A short intent delay keeps a quick sweep along the screen edge from
-// yanking the panel open; the bar lights up immediately either way.
-function armExpand() {
-  if (expanded || armTimer) return;
-  root.classList.add('armed');
-  armTimer = setTimeout(() => {
-    armTimer = null;
-    requestExpand();
-  }, GEO.HOVER_INTENT);
-}
-
-function requestExpand() {
-  clearTimeout(collapseTimer);
-  collapseTimer = null;
-  disarm();
-  endPeek();
-  if (expanded) return;
-  api.dockExpand();
-}
-
 function requestCollapse() {
   if (pinned || drag.active || pointerDown) return;
   if (!expanded && !peeking) return;
@@ -142,14 +110,20 @@ function requestCollapse() {
   }, GEO.COLLAPSE_DELAY);
 }
 
+// The cursor is dwelling on the bar - light it up while main counts down
+api.onDockArmed((on) => root.classList.toggle('armed', !!on));
+
 // Main is the single source of truth for the expanded state
 api.onDockExpanded((on) => {
   expanded = !!on;
-  disarm();
   root.classList.toggle('expanded', expanded);
+  endPeek();
 
-  if (!expanded) {
-    endPeek();
+  if (expanded) {
+    clearTimeout(collapseTimer);
+    collapseTimer = null;
+  } else {
+    root.classList.remove('armed');
     setPinned(false);
     setSettingsView(false);
     clearSearch();
@@ -162,7 +136,8 @@ api.onDockExpanded((on) => {
 // it - whether that should close anything is decided right here.
 api.onDockCursorOut(() => requestCollapse());
 
-// Short look-at-me on launch so the bar is easy to find
+// Short look-at-me on launch so the bar is easy to find. Main widens the
+// hover target to the whole panel for as long as this lasts.
 api.onDockPeek(() => {
   if (expanded || pinned) return;
   peeking = true;
@@ -183,32 +158,23 @@ api.onDockInfo(({ index, total }) => {
   headerMonitor.textContent = total > 1 ? 'monitor ' + index + '/' + total : '';
 });
 
+// Only meaningful once the panel is open - at that point the window is
+// interactive and real mouse events arrive, which closes it a poll tick
+// sooner than the watcher in main would.
 document.addEventListener('mousemove', (e) => {
   // Self-heal: a button released outside the window never reaches us
   if (pointerDown && e.buttons === 0) pointerDown = false;
+  if (!expanded) return;
 
-  if (expanded || peeking) {
-    if (inPanelZone(e.clientX, e.clientY)) {
-      clearTimeout(collapseTimer);
-      collapseTimer = null;
-      if (peeking) requestExpand(); // reaching for it during the peek takes over
-    } else if (!inTabZone(e.clientX, e.clientY)) {
-      requestCollapse();
-    }
-    return;
-  }
-
-  if (inTabZone(e.clientX, e.clientY)) {
-    armExpand();
+  if (inPanelZone(e.clientX, e.clientY)) {
+    clearTimeout(collapseTimer);
+    collapseTimer = null;
   } else {
-    disarm();
+    requestCollapse();
   }
 });
 
-document.addEventListener('mouseleave', () => {
-  disarm();
-  requestCollapse();
-});
+document.addEventListener('mouseleave', () => requestCollapse());
 
 document.addEventListener('mousedown', () => { pointerDown = true; });
 document.addEventListener('mouseup',   () => { pointerDown = false; });

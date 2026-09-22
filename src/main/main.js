@@ -27,7 +27,10 @@ let captureWindows = []; // one BrowserWindow per display - avoids multi-monitor
 let barVisible     = true;  // false when the user hides the bar from the tray
 let docksParked    = false; // true while the targeting overlay / typing owns the screen
 let expandedWcId   = null;  // webContents id of the dock that is currently expanded
-let cursorGuard    = null;  // interval watching for the cursor leaving an expanded dock
+let hoverWatch     = null;  // interval that watches where the cursor actually is
+let armedEntry     = null;  // dock whose bar the cursor is currently dwelling on
+let armedSince     = 0;     // when that dwell started
+let peekUntil      = 0;     // the launch peek widens the target until this time
 let typingPending  = null;  // { text, mode } for capture -> typing handoff
 let isQuitting     = false;
 let pendingUpdate  = null;  // { version, url } when a newer release exists
@@ -51,7 +54,7 @@ function quitApp() {
   isQuitting = true;
 
   try { typingEngine.cancel(); } catch (_) {}
-  stopCursorGuard();
+  stopHoverWatch();
 
   for (const entry of dockWindows) {
     if (entry.win && !entry.win.isDestroyed()) entry.win.destroy();
@@ -140,10 +143,10 @@ function buildDockWindow(display, index) {
 
   win.setAlwaysOnTop(true, 'screen-saver', 1);
 
-  // Collapsed docks are click-through. forward:true still delivers mouse move
-  // messages to the renderer, which is what lets it notice the cursor entering
-  // the bar while everything underneath stays clickable.
-  win.setIgnoreMouseEvents(true, { forward: true });
+  // Collapsed docks are click-through, so everything underneath stays
+  // clickable. Opening is driven by the cursor watcher below, not by mouse
+  // events on this window - see the note there.
+  win.setIgnoreMouseEvents(true);
 
   win.loadFile(path.join(__dirname, '../renderer/overlay/index.html'));
 
@@ -171,10 +174,8 @@ function syncDockWindows() {
 
   for (const entry of dockWindows) {
     if (!wantedIds.has(entry.displayId) && entry.win && !entry.win.isDestroyed()) {
-      if (entry.win.webContents.id === expandedWcId) {
-        expandedWcId = null;
-        stopCursorGuard();
-      }
+      if (entry.win.webContents.id === expandedWcId) expandedWcId = null;
+      if (armedEntry === entry) armedEntry = null;
       entry.win.destroy();
     }
   }
@@ -199,6 +200,8 @@ function syncDockWindows() {
       entry.win.webContents.send('dock:info', { index: entry.index, total: dockWindows.length });
     }
   }
+
+  syncHoverWatch();
 }
 
 function dockBroadcast(channel, payload) {
@@ -214,61 +217,128 @@ function dockByWebContents(id) {
 // ---------- Expand / collapse ----------
 function expandDock(entry) {
   if (!entry || !barVisible || docksParked) return;
-  if (entry.win.isDestroyed()) return;
+  if (!entry.win || entry.win.isDestroyed()) return;
+  if (expandedWcId === entry.win.webContents.id) return;
 
   // Only one dock is open at a time
   for (const other of dockWindows) {
     if (other !== entry) collapseDock(other);
   }
 
+  armedEntry = null;
   entry.win.setIgnoreMouseEvents(false);
+  entry.win.webContents.send('dock:armed', false);
   entry.win.webContents.send('dock:set-expanded', true);
   expandedWcId = entry.win.webContents.id;
-  startCursorGuard();
 }
 
 function collapseDock(entry) {
   if (!entry || !entry.win || entry.win.isDestroyed()) return;
 
   entry.pinned = false;
-  entry.win.setIgnoreMouseEvents(true, { forward: true });
+  entry.win.setIgnoreMouseEvents(true);
   entry.win.webContents.send('dock:set-expanded', false);
 
-  if (expandedWcId === entry.win.webContents.id) {
-    expandedWcId = null;
-    stopCursorGuard();
-  }
+  if (expandedWcId === entry.win.webContents.id) expandedWcId = null;
 }
 
 function collapseAllDocks() {
   for (const entry of dockWindows) collapseDock(entry);
 }
 
-// Safety net: Chromium does not reliably deliver a final mouseleave when a
-// window flips between click-through and interactive, so the main process
-// watches the real cursor. It only reports the fact - the renderer decides,
-// because it is the side that knows about pinning and in-flight drags.
-function startCursorGuard() {
-  stopCursorGuard();
-  cursorGuard = setInterval(() => {
-    const entry = dockByWebContents(expandedWcId);
-    if (!entry) { stopCursorGuard(); return; }
-    if (entry.pinned) return;
+// ============================================================
+// Hover watcher
+// ============================================================
+// A click-through window is WS_EX_TRANSPARENT, so Windows sends it no mouse
+// messages at all. Electron can forward them anyway, but only by installing a
+// global low-level mouse hook - unreliable, and exactly the sort of hook
+// endpoint protection takes an interest in. So the main process just looks at
+// where the cursor is, the same call the typing killswitch already relies on.
+// It reports facts; the renderer decides what they mean, because it is the
+// side that knows about pinning and in-flight drags.
 
-    const b = entry.win.getBounds();
-    const p = screen.getCursorScreenPoint();
-    const out = p.x < b.x - 4 || p.x > b.x + b.width + 4 ||
-                p.y < b.y - 4 || p.y > b.y + b.height + 4;
-
-    if (out) entry.win.webContents.send('dock:cursor-out');
-  }, 150);
+function startHoverWatch() {
+  if (hoverWatch) return;
+  hoverWatch = setInterval(tickHover, GEO.POLL_MS);
 }
 
-function stopCursorGuard() {
-  if (cursorGuard) {
-    clearInterval(cursorGuard);
-    cursorGuard = null;
+function stopHoverWatch() {
+  if (hoverWatch) {
+    clearInterval(hoverWatch);
+    hoverWatch = null;
   }
+  setArmed(null);
+}
+
+function syncHoverWatch() {
+  if (barVisible && !docksParked && dockWindows.length) startHoverWatch();
+  else stopHoverWatch();
+}
+
+// The bar, plus a margin so it does not need pixel-perfect aiming. While the
+// panel is peeking open on launch, the whole panel counts as the target, so
+// reaching for what you can see does the obvious thing.
+function hitTab(entry, p) {
+  const b = entry.win.getBounds();
+
+  if (Date.now() < peekUntil) {
+    return p.x >= b.x - 1 && p.x <= b.x + GEO.PANEL_W &&
+           p.y >= b.y + GEO.PAD_Y && p.y <= b.y + GEO.PAD_Y + GEO.PANEL_H;
+  }
+
+  const midY  = b.y + (b.height / 2);
+  const halfH = (GEO.TAB_H / 2) + GEO.HOT_PAD_Y;
+  return p.x >= b.x - 1 && p.x <= b.x + GEO.TAB_W + GEO.HOT_PAD_X &&
+         p.y >= midY - halfH && p.y <= midY + halfH;
+}
+
+function hitPanel(entry, p) {
+  const b = entry.win.getBounds();
+  const g = GEO.GRACE;
+  return p.x >= b.x - g && p.x <= b.x + GEO.PANEL_W + g &&
+         p.y >= b.y + GEO.PAD_Y - g && p.y <= b.y + GEO.PAD_Y + GEO.PANEL_H + g;
+}
+
+function setArmed(entry) {
+  if (armedEntry === entry) return;
+  if (armedEntry && armedEntry.win && !armedEntry.win.isDestroyed()) {
+    armedEntry.win.webContents.send('dock:armed', false);
+  }
+  armedEntry = entry;
+  armedSince = Date.now();
+  if (entry && entry.win && !entry.win.isDestroyed()) {
+    entry.win.webContents.send('dock:armed', true);
+  }
+}
+
+function tickHover() {
+  if (!barVisible || docksParked || !dockWindows.length) return;
+
+  const p    = screen.getCursorScreenPoint();
+  const open = dockByWebContents(expandedWcId);
+
+  if (open) {
+    if (!open.pinned && !hitPanel(open, p)) {
+      open.win.webContents.send('dock:cursor-out');
+    }
+    return;
+  }
+
+  for (const entry of dockWindows) {
+    if (!entry.win || entry.win.isDestroyed()) continue;
+    if (!hitTab(entry, p)) continue;
+
+    setArmed(entry);
+    if (Date.now() - armedSince >= GEO.HOVER_INTENT) expandDock(entry);
+    return;
+  }
+
+  setArmed(null);
+}
+
+function peekDocks() {
+  peekUntil = Date.now() + GEO.PEEK_MS;
+  dockBroadcast('dock:peek');
 }
 
 // ---------- Park / restore (typing flow and tray toggle) ----------
@@ -276,6 +346,7 @@ function stopCursorGuard() {
 // drag-to-target flow needs a real hide() rather than just a visual collapse.
 function parkDocks() {
   docksParked = true;
+  stopHoverWatch();
   collapseAllDocks();
   for (const entry of dockWindows) {
     if (entry.win && !entry.win.isDestroyed()) entry.win.hide();
@@ -287,14 +358,16 @@ function restoreDocks() {
   if (!barVisible) return;
   for (const entry of dockWindows) {
     if (entry.win && !entry.win.isDestroyed()) {
-      entry.win.setIgnoreMouseEvents(true, { forward: true });
+      entry.win.setIgnoreMouseEvents(true);
       entry.win.webContents.send('dock:set-expanded', false);
       entry.win.showInactive();
     }
   }
+  syncHoverWatch();
 }
 
 function hideBar() {
+  stopHoverWatch();
   collapseAllDocks();
   for (const entry of dockWindows) {
     if (entry.win && !entry.win.isDestroyed()) entry.win.hide();
@@ -306,7 +379,7 @@ function toggleBar() {
   setBarVisible(barVisible);
   if (barVisible) {
     restoreDocks();
-    dockBroadcast('dock:peek');
+    peekDocks();
   } else {
     hideBar();
   }
@@ -319,7 +392,7 @@ function showBar() {
   }
   if (!docksParked) {
     restoreDocks();
-    dockBroadcast('dock:peek');
+    peekDocks();
   }
 }
 
@@ -468,10 +541,8 @@ function setupIPC() {
   });
 
   // ---- Dock hover lifecycle ----
-  ipcMain.on('dock:expand', (e) => {
-    expandDock(dockByWebContents(e.sender.id));
-  });
-
+  // Opening is decided by the hover watcher; the renderer only ever asks to
+  // close, because only it knows whether something is mid-interaction.
   ipcMain.on('dock:collapse', (e) => {
     collapseDock(dockByWebContents(e.sender.id));
   });
@@ -629,7 +700,7 @@ if (!gotLock) {
     screen.on('display-metrics-changed', onDisplayLayoutChanged);
 
     // Peek the panel open briefly on launch so the bar is easy to find.
-    setTimeout(() => dockBroadcast('dock:peek'), 900);
+    setTimeout(peekDocks, 900);
 
     createTray({
       onToggleBar:  toggleBar,
@@ -659,7 +730,7 @@ if (!gotLock) {
   app.on('will-quit', () => {
     escapeKey.unregisterAll();
     clipboardMonitor.stop();
-    stopCursorGuard();
+    stopHoverWatch();
     destroyTray();
   });
 }

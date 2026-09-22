@@ -39,8 +39,12 @@
     HOT_PAD_X: 12,
     HOT_PAD_Y: 18,
 
-    // Hover intent: a quick sweep along the screen edge should not open it
-    HOVER_INTENT: 90,
+    // How often the main process looks at where the cursor actually is
+    POLL_MS: 90,
+
+    // Hover intent: a quick sweep along the screen edge should not open it.
+    // Counted as dwell time, so it costs one extra poll tick at most.
+    HOVER_INTENT: 120,
 
     // Slack around the expanded panel before the cursor counts as "left".
     // Deliberately small: the window is only SHADOW px wider than the panel, so
