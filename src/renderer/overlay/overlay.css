@@ -40,7 +40,7 @@
   --panel-h:   450px;
   --pad-right: 52px;
   --pad-y:     38px;
-  --tab-w:     16px;
+  --tab-w:     12px;
   --tab-h:     320px;
 }
 
@@ -126,7 +126,7 @@ html, body {
   width: var(--tab-w);
   height: var(--tab-h);
   margin-top: calc(var(--tab-h) / -2);
-  border-radius: 0 9px 9px 0;
+  border-radius: 0 7px 7px 0;
   background: linear-gradient(180deg, var(--accent-glow), var(--accent-primary));
   box-shadow: 0 0 8px var(--accent-a40), 2px 0 14px rgba(0, 0, 0, 0.45);
   opacity: 0.92;
