@@ -1,0 +1,36 @@
+<!--
+  0xpaste app icon - the master every raster icon is generated from.
+  Run `npm run setup-icon` after changing it.
+
+  Same mark as the one in the panel header, redrawn in solid shapes instead
+  of strokes: this has to survive being scaled down to 16x16 in the tray,
+  where a 1.7px outline turns to mush. Two sheets for copy and paste, one
+  finished line of text and one still being typed with the caret at its end.
+
+  The plate gradient is in userSpaceOnUse, so the shapes knocked out of the
+  front sheet line up with the plate behind them exactly.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <defs>
+    <linearGradient id="plate" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="512" y2="512">
+      <stop offset="0" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#6D28D9"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="115" fill="url(#plate)"/>
+
+  <!-- the sheet being copied from -->
+  <rect x="198" y="102" width="196" height="214" rx="40" fill="#fff" opacity="0.5"/>
+
+  <!-- the gap that separates the two sheets, punched in the plate colour -->
+  <rect x="102" y="180" width="228" height="246" rx="52" fill="url(#plate)"/>
+
+  <!-- the sheet being pasted into -->
+  <rect x="118" y="196" width="196" height="214" rx="40" fill="#fff"/>
+
+  <!-- a finished line, then one still being typed -->
+  <rect x="150" y="252" width="132" height="24" rx="12" fill="url(#plate)"/>
+  <rect x="150" y="316" width="62"  height="24" rx="12" fill="url(#plate)"/>
+  <rect x="232" y="305" width="28"  height="46" rx="12" fill="url(#plate)"/>
+</svg>

@@ -213,11 +213,12 @@ The installer outputs to `dist/0xpaste Setup 1.1.0.exe`.
 │       ├── overlay/              # Dock panel UI (history, search, inline settings)
 │       └── capture/              # Fullscreen transparent drop target
 ├── scripts/
-│   ├── generate-icon.js          # Converts root icon.png to ICO (multi-res)
+│   ├── generate-icon.js          # Renders assets/icon.svg to PNG + multi-res ICO
 │   └── download-fonts.js         # Downloads Silkscreen font from Google Fonts
 ├── build/
 │   └── installer.nsh             # NSIS custom installer (WOW64-aware cleanup)
-└── icon.png                      # Source app icon
+└── assets/
+    └── icon.svg                  # Source app icon - every raster icon comes from this
 ```
 
 ---

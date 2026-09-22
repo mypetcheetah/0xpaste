@@ -41,6 +41,7 @@
     "electron": "26.6.10",
     "electron-builder": "24.13.3",
     "png-to-ico": "2.1.8",
+    "rcedit": "^5.0.2",
     "sharp": "0.33.2"
   },
   "build": {
@@ -84,6 +85,7 @@
       ],
       "language": "1033",
       "runAfterFinish": true
-    }
+    },
+    "afterPack": "scripts/after-pack.js"
   }
 }
