@@ -483,6 +483,14 @@ function recreateCaptureWindows() {
   }
   captureWindows = [];
   createCaptureWindows();
+
+  // New windows start on the stylesheet default until they are told otherwise
+  const accent = settingsStore.getSettings().accentColor;
+  for (const win of captureWindows) {
+    win.webContents.once('did-finish-load', () => {
+      if (!win.isDestroyed()) win.webContents.send('capture:accent', accent);
+    });
+  }
 }
 
 function onDisplayLayoutChanged() {
@@ -492,9 +500,10 @@ function onDisplayLayoutChanged() {
 
 // ---------- Capture flow ----------
 function showCaptureWindows(mode, text) {
+  const accent = settingsStore.getSettings().accentColor;
   for (const win of captureWindows) {
     if (!win || win.isDestroyed()) continue;
-    win.webContents.send('capture:init', { mode, text });
+    win.webContents.send('capture:init', { mode, text, accent });
     win.show();
   }
   // Focus the primary display's capture window so it can receive keyboard (Escape)
@@ -673,6 +682,7 @@ function setupIPC() {
 
       case 'accentColor':
         dockBroadcastExcept(e.sender.id, 'settings:accent-color', value);
+        captureBroadcast('capture:accent', value);
         break;
 
       case 'theme':
@@ -730,6 +740,14 @@ function setupIPC() {
       return null;
     }
   });
+}
+
+// The targeting overlay is a separate window with its own document, so the
+// accent has to be pushed to it as well or it keeps the default purple.
+function captureBroadcast(channel, payload) {
+  for (const win of captureWindows) {
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+  }
 }
 
 function dockBroadcastExcept(wcId, channel, payload) {

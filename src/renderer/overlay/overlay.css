@@ -65,7 +65,9 @@
   --bg-secondary:     rgba(255, 255, 255, 0.08);
   --bg-tertiary:      rgba(255, 255, 255, 0.12);
   --border-default:   rgba(255, 255, 255, 0.18);
-  --border-hover:     rgba(180, 140, 255, 0.85);
+  /* Lightened accent rather than a fixed lilac, so glass follows the colour
+     picker like every other theme does. */
+  --border-hover:     color-mix(in srgb, var(--accent-primary) 55%, #fff);
   --text-primary:     #FFFFFF;
   --text-secondary:   rgba(255, 255, 255, 0.70);
   --text-placeholder: rgba(255, 255, 255, 0.35);
