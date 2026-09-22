@@ -14,8 +14,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startClick: (text) => ipcRenderer.send('typing:start-click', { text }),
   cancelTyping: () => ipcRenderer.send('typing:cancel'),
 
-  // Dock lifecycle - the renderer owns the hover policy, main owns the window
-  dockExpand: () => ipcRenderer.send('dock:expand'),
+  // Dock lifecycle - main watches the cursor and decides when to open, the
+  // renderer decides when it is safe to close
   dockCollapse: () => ipcRenderer.send('dock:collapse'),
   dockPin: (pinned) => ipcRenderer.send('dock:pin', { pinned }),
 
@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRefreshHistory: (cb) => ipcRenderer.on('clipboard:refresh', (_, history) => cb(history)),
   onPinUpdated: (cb) => ipcRenderer.on('clipboard:pin-updated', (_, data) => cb(data)),
   onDockExpanded: (cb) => ipcRenderer.on('dock:set-expanded', (_, expanded) => cb(expanded)),
+  onDockArmed: (cb) => ipcRenderer.on('dock:armed', (_, armed) => cb(armed)),
   onDockCursorOut: (cb) => ipcRenderer.on('dock:cursor-out', () => cb()),
   onDockPeek: (cb) => ipcRenderer.on('dock:peek', () => cb()),
   onDockInfo: (cb) => ipcRenderer.on('dock:info', (_, info) => cb(info)),
