@@ -123,6 +123,10 @@ api.onDockExpanded((on) => {
   root.classList.toggle('expanded', expanded);
   endPeek();
 
+  // Main drives this at every point where an in-flight drag is already over
+  // and done with, so nothing half-finished can survive the transition.
+  resetDragState();
+
   if (expanded) {
     clearTimeout(collapseTimer);
     collapseTimer = null;
@@ -167,8 +171,9 @@ api.onDockInfo(({ index, total }) => {
 // interactive and real mouse events arrive, which closes it a poll tick
 // sooner than the watcher in main would.
 document.addEventListener('mousemove', (e) => {
-  // Self-heal: a button released outside the window never reaches us
-  if (pointerDown && e.buttons === 0) pointerDown = false;
+  // Self-heal: a button released outside the window never reaches us, so
+  // believe the event over anything we are still holding on to.
+  if (e.buttons === 0 && (pointerDown || drag.active)) resetDragState();
   if (!expanded) return;
 
   if (inPanelZone(e.clientX, e.clientY)) {
@@ -248,6 +253,22 @@ function watchNativeDialog(el) {
 document.addEventListener('mousedown', (e) => {
   if (modalOpen && !e.target.closest('#accent-color-input')) holdOpen(false);
 });
+
+// A drag is handed off to main the moment it starts, and main hides this
+// window to give Windows back the mouse capture - so the mouseup that would
+// have ended the drag never arrives here. Anything that depends on the drag
+// being over has to clear it explicitly instead of waiting for that event.
+function resetDragState() {
+  if (drag.itemId) {
+    const card = document.querySelector(`.item-card[data-id="${drag.itemId}"]`);
+    if (card) card.classList.remove('dragging');
+  }
+  drag.active = false;
+  drag.moved  = false;
+  drag.itemId = null;
+  drag.text   = '';
+  pointerDown = false;
+}
 
 // ---- Pin ----
 function setPinned(on) {
