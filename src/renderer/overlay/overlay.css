@@ -268,11 +268,13 @@ html, body {
   min-width: 0;
 }
 
+/* Inline so it inherits currentColor and follows the accent live, exactly
+   like the wordmark next to it. */
 .app-logo {
   width: 22px;
   height: 22px;
   flex-shrink: 0;
-  object-fit: contain;
+  color: var(--accent-primary);
   user-select: none;
   -webkit-user-drag: none;
   filter: drop-shadow(0 0 6px var(--accent-a40));
