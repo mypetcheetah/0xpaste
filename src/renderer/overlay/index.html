@@ -29,7 +29,24 @@
       <header class="overlay-header">
         <div class="header-top">
           <div class="app-brand">
-            <img class="app-logo" src="../../assets/icon.png" alt="">
+            <!-- Two sheets for copy and paste, and a text caret sitting at the end
+                 of a half-typed line - which is what this thing actually does.
+                 Inline so it inherits currentColor and tracks the accent live. -->
+            <svg class="app-logo" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <!-- the sheet being copied from, sitting behind -->
+              <path d="M8.6 8.6V4.9a2.4 2.4 0 0 1 2.4-2.4h7.1a2.4 2.4 0 0 1 2.4 2.4v9.2a2.4 2.4 0 0 1-2.4 2.4h-2.6"
+                    stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+                    stroke-linejoin="round" opacity="0.5"/>
+              <!-- the sheet being pasted into -->
+              <rect x="3.45" y="8.45" width="12.1" height="13.1" rx="2.4"
+                    stroke="currentColor" stroke-width="1.7"/>
+              <!-- a finished line, then one still being typed -->
+              <path d="M6.9 13h5.2" stroke="currentColor" stroke-width="1.7"
+                    stroke-linecap="round" opacity="0.6"/>
+              <path d="M6.9 17h2.4" stroke="currentColor" stroke-width="1.7"
+                    stroke-linecap="round" opacity="0.6"/>
+              <rect x="10.7" y="15.5" width="1.9" height="3" rx="0.7" fill="currentColor"/>
+            </svg>
             <div class="app-title">0xpaste</div>
           </div>
           <div class="header-actions">
