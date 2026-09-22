@@ -31,7 +31,9 @@ let hoverWatch     = null;  // interval that watches where the cursor actually i
 let armedEntry     = null;  // dock whose bar the cursor is currently dwelling on
 let armedSince     = 0;     // when that dwell started
 let peekUntil      = 0;     // the launch peek widens the target until this time
-let typingPending  = null;  // { text, mode } for capture -> typing handoff
+let typingPending  = null;  // { text, mode, originWc } for capture -> typing handoff
+let typingDock     = null;  // the dock showing progress for the paste in flight
+let typingHold     = false; // that panel is a progress display - leave it alone
 let isQuitting     = false;
 let pendingUpdate  = null;  // { version, url } when a newer release exists
 
@@ -321,7 +323,7 @@ function tickHover() {
   const open = dockByWebContents(expandedWcId);
 
   if (open) {
-    if (!open.pinned && !open.held && !hitPanel(open, p)) {
+    if (!open.pinned && !open.held && !typingHold && !hitPanel(open, p)) {
       open.win.webContents.send('dock:cursor-out');
     }
     return;
@@ -349,6 +351,7 @@ function peekDocks() {
 // drag-to-target flow needs a real hide() rather than just a visual collapse.
 function parkDocks() {
   docksParked = true;
+  typingHold  = false;
   stopHoverWatch();
   collapseAllDocks();
   for (const entry of dockWindows) {
@@ -477,13 +480,55 @@ function hideCaptureWindows() {
 function cancelCapture() {
   hideCaptureWindows();
   typingPending = null;
+  typingHold    = false;
+  typingDock    = null;
   restoreDocks();
+}
+
+// Put the panel back up while the typing runs, so its progress counter is
+// actually visible - it was being hidden for the whole paste, which is the
+// one moment it has something to say.
+//
+// Deliberately click-through and never focused: the keystrokes have to keep
+// going to the target window, and moving the mouse at all would trip the
+// killswitch anyway. This is a readout, not a control.
+function showTypingPanel(origin) {
+  if (typingHold) return;
+
+  const entry = pickTypingDock(origin);
+  if (!entry) return;
+
+  typingHold = true;
+  typingDock = entry;
+  entry.win.setIgnoreMouseEvents(true);
+  entry.win.showInactive();
+  entry.win.webContents.send('dock:set-expanded', true);
+  expandedWcId = entry.win.webContents.id;
+}
+
+// The one on the screen the text is landing on, so it is where the user is
+// already looking. Failing that, the one the item was dragged out of.
+function pickTypingDock(origin) {
+  const live = dockWindows.filter(e => e.win && !e.win.isDestroyed());
+  if (!live.length) return null;
+
+  if (origin && origin.point) {
+    const display = screen.getDisplayNearestPoint(origin.point);
+    const onScreen = live.find(e => e.displayId === String(display.id));
+    if (onScreen) return onScreen;
+  }
+  if (origin && origin.wc) {
+    const fromDock = live.find(e => e.win.webContents.id === origin.wc);
+    if (fromDock) return fromDock;
+  }
+  return live[0];
 }
 
 async function executeTyping(x, y) {
   if (!typingPending) return;
 
-  const { text } = typingPending;
+  const { text, originWc } = typingPending;
+  const origin = { wc: originWc, point: { x, y } };
   typingPending = null;
 
   const settings = settingsStore.getSettings();
@@ -501,7 +546,12 @@ async function executeTyping(x, y) {
     if (dist > CANCEL_DIST) typingEngine.cancel();
   }, 80);
 
-  const progressCallback = (percent) => dockBroadcast('typing:progress', percent);
+  // The first tick means the target has been clicked, focused and is taking
+  // keystrokes, so it is safe to put the panel back on screen.
+  const progressCallback = (percent) => {
+    showTypingPanel(origin);
+    dockBroadcast('typing:progress', percent);
+  };
 
   const phys = screen.dipToScreenPoint({ x, y });
 
@@ -515,10 +565,17 @@ async function executeTyping(x, y) {
     wasCancelled = wasCancelled || typingEngine.wasCancelled();
     setTypingMode(false);
     dockBroadcast('typing:done', { cancelled: wasCancelled });
-    // Put the bar back, collapsed. The cursor is sitting in the target window,
-    // so expanding here would only be in the way - one flick to the left edge
-    // reopens it for the next paste.
-    restoreDocks();
+
+    // Let the result stand long enough to read, then tuck everything away.
+    // The cursor is sitting in the target window by now, so leaving the panel
+    // open would only be in the way - one flick to the left edge brings it
+    // back for the next paste.
+    const linger = typingHold ? (wasCancelled ? 1500 : 1000) : 0;
+    setTimeout(() => {
+      typingHold = false;
+      typingDock = null;
+      restoreDocks();
+    }, linger);
   }
 }
 
@@ -573,16 +630,16 @@ function setupIPC() {
     syncDockWindows();
   });
 
-  ipcMain.on('typing:start-drag', (_, { text }) => {
-    typingPending = { text, mode: 'drag' };
+  ipcMain.on('typing:start-drag', (e, { text }) => {
+    typingPending = { text, mode: 'drag', originWc: e.sender.id };
     // Park FIRST - Win32 releases mouse capture when the window is hidden.
     // This allows the capture windows to receive subsequent mouse events.
     parkDocks();
     showCaptureWindows('drag', text);
   });
 
-  ipcMain.on('typing:start-click', (_, { text }) => {
-    typingPending = { text, mode: 'click' };
+  ipcMain.on('typing:start-click', (e, { text }) => {
+    typingPending = { text, mode: 'click', originWc: e.sender.id };
     // Animate the panel out first, then hard-hide
     collapseAllDocks();
     setTimeout(() => {

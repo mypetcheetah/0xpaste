@@ -317,14 +317,12 @@ api.onTypingProgress((percent) => {
   typingInd.classList.add('visible');
 });
 
+// The panel is on screen for this now, so say how it ended rather than just
+// blanking out. Main collapses the dock shortly after.
 api.onTypingDone(({ cancelled } = {}) => {
-  if (cancelled) {
-    typingInd.textContent = '[cancelled]';
-    typingInd.classList.add('visible');
-    setTimeout(() => typingInd.classList.remove('visible'), 1200);
-  } else {
-    typingInd.classList.remove('visible');
-  }
+  typingInd.textContent = cancelled ? '[cancelled]' : '[done]';
+  typingInd.classList.add('visible');
+  setTimeout(() => typingInd.classList.remove('visible'), cancelled ? 1200 : 900);
   selectedItemId = null;
   renderList();
 });

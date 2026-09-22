@@ -112,9 +112,9 @@ While the panel is closed the window is click-through, so the bar never intercep
 | **Keep it open** | Click `[pin]` - the panel then stays out until you click it again |
 | **Hide the bar** | Left-click the tray icon (or tray menu -> Hide bar) |
 
-### After pasting
+### While and after pasting
 
-The bar comes straight back, collapsed. Your cursor is sitting in the target window at that point, so an open panel would only be in the way - one flick to the left edge and you are ready for the next paste.
+The panel comes back up while the typing runs, so you can watch the progress counter, and tucks itself away once it is done. Your cursor is sitting in the target window at that point, so leaving it open would only be in the way - one flick to the left edge and you are ready for the next paste.
 
 ---
 
