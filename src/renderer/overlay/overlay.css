@@ -40,8 +40,8 @@
   --panel-h:   450px;
   --pad-right: 52px;
   --pad-y:     38px;
-  --tab-w:      8px;
-  --tab-h:      160px;
+  --tab-w:     16px;
+  --tab-h:     320px;
 }
 
 /* ---- White office theme ---- */
@@ -126,7 +126,7 @@ html, body {
   width: var(--tab-w);
   height: var(--tab-h);
   margin-top: calc(var(--tab-h) / -2);
-  border-radius: 0 5px 5px 0;
+  border-radius: 0 9px 9px 0;
   background: linear-gradient(180deg, var(--accent-glow), var(--accent-primary));
   box-shadow: 0 0 8px var(--accent-a40), 2px 0 14px rgba(0, 0, 0, 0.45);
   opacity: 0.92;
@@ -140,9 +140,9 @@ html, body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 2px;
-  height: 26px;
-  margin: -13px 0 0 -1px;
+  width: 3px;
+  height: 48px;
+  margin: -24px 0 0 -1.5px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.55);
 }

@@ -713,10 +713,14 @@ const DEFAULTS = {
   theme:          'default'
 };
 
-const CHAR_DELAY_MIN = 1;
+const CHAR_DELAY_MIN = 0;  // 0 is turbo: no pause between keystrokes
 const CHAR_DELAY_MAX = 150;
 const INIT_DELAY_MIN = 1;
 const INIT_DELAY_MAX = 4000;
+
+function speedLabel(ms) {
+  return ms === 0 ? 'turbo' : ms + 'ms/char';
+}
 
 function clampInt(val, min, max, fallback) {
   const n = parseInt(val, 10);
@@ -740,7 +744,7 @@ resetBtn.addEventListener('click', () => {
   const speedSlider = document.getElementById('speed-slider');
   const speedValue  = document.getElementById('speed-value');
   if (speedSlider) speedSlider.value = DEFAULTS.charDelay;
-  if (speedValue)  speedValue.textContent = `${DEFAULTS.charDelay}ms/char`;
+  if (speedValue)  speedValue.textContent = speedLabel(DEFAULTS.charDelay);
 
   // Initial delay (slider + number)
   const delaySlider = document.getElementById('delay-slider');
@@ -796,12 +800,12 @@ function initSettings(settings) {
   if (speedSlider) {
     const cd = clampInt(settings.charDelay, CHAR_DELAY_MIN, CHAR_DELAY_MAX, DEFAULTS.charDelay);
     speedSlider.value = cd;
-    speedValue.textContent = `${cd}ms/char`;
+    speedValue.textContent = speedLabel(cd);
 
     let speedTimer = null;
     speedSlider.addEventListener('input', () => {
       const val = clampInt(speedSlider.value, CHAR_DELAY_MIN, CHAR_DELAY_MAX, DEFAULTS.charDelay);
-      speedValue.textContent = `${val}ms/char`;
+      speedValue.textContent = speedLabel(val);
       clearTimeout(speedTimer);
       speedTimer = setTimeout(() => api.updateSetting('charDelay', val), 250);
     });

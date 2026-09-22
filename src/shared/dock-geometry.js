@@ -31,9 +31,10 @@
     PAD_RIGHT: 52,
     PAD_Y: 38,
 
-    // Collapsed bar - the sliver that sticks out at the screen edge
-    TAB_W: 8,
-    TAB_H: 160,
+    // Collapsed bar - the sliver that sticks out at the screen edge.
+    // TAB_H has to stay under PANEL_H + 2*PAD_Y, the window it lives in.
+    TAB_W: 16,
+    TAB_H: 320,
 
     // Hover hotzone around the bar, so it does not need pixel-perfect aiming
     HOT_PAD_X: 12,
