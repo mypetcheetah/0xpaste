@@ -71,7 +71,8 @@ const GEO = window.DOCK_GEO;
   const s = document.documentElement.style;
   s.setProperty('--panel-w',    GEO.PANEL_W + 'px');
   s.setProperty('--panel-h',    GEO.PANEL_H + 'px');
-  s.setProperty('--shadow-pad', GEO.SHADOW  + 'px');
+  s.setProperty('--pad-right',  GEO.PAD_RIGHT + 'px');
+  s.setProperty('--pad-y',      GEO.PAD_Y     + 'px');
   s.setProperty('--tab-w',      GEO.TAB_W   + 'px');
   s.setProperty('--tab-h',      GEO.TAB_H   + 'px');
 })();
@@ -96,7 +97,7 @@ function inTabZone(x, y) {
 function inPanelZone(x, y) {
   const g = GEO.GRACE;
   return x >= -g && x <= GEO.PANEL_W + g &&
-         y >= GEO.SHADOW - g && y <= GEO.SHADOW + GEO.PANEL_H + g;
+         y >= GEO.PAD_Y - g && y <= GEO.PAD_Y + GEO.PANEL_H + g;
 }
 
 function endPeek() {

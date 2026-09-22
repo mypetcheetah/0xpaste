@@ -105,8 +105,8 @@ function describeDisplays() {
 // ============================================================
 function dockBoundsFor(display) {
   const wa     = display.workArea;
-  const width  = GEO.PANEL_W + GEO.SHADOW;
-  const height = GEO.PANEL_H + (GEO.SHADOW * 2);
+  const width  = GEO.PANEL_W + GEO.PAD_RIGHT;
+  const height = GEO.PANEL_H + (GEO.PAD_Y * 2);
 
   return {
     x: wa.x,
@@ -582,7 +582,7 @@ function setupIPC() {
       // Window rect -> display-relative -> the panel area inside that window
       const cropped = source.thumbnail.crop({
         x:      Math.round((b.x - display.bounds.x) * sf),
-        y:      Math.round((b.y - display.bounds.y + GEO.SHADOW) * sf),
+        y:      Math.round((b.y - display.bounds.y + GEO.PAD_Y) * sf),
         width:  Math.round(GEO.PANEL_W * sf),
         height: Math.round(GEO.PANEL_H * sf)
       });
