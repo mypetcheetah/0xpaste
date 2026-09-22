@@ -45,7 +45,7 @@ This means it works in places where normal Ctrl+V is blocked: **remote desktop s
 | 🔍 **Live search** | Instantly filter your history as you type. |
 | 📌 **Pin items** | Prevent important items from being rotated out of history. |
 | 🔒 **Password masking** | Items that look like passwords are auto-detected and masked by default - shows first 4 chars + blurred dots. Eye icon reveals full text. |
-| 🚫 **Typing killswitch** | Move your mouse more than 80px during typing to cancel immediately - works in RDP where keyboard shortcuts are intercepted. |
+| 🚫 **Typing killswitch** | Stop a paste half way with either the mouse or `Esc`, whichever suits you. Mouse movement is the default because it is the only one that survives an RDP session, which swallows key presses before they reach the app. |
 | ↵ **Auto-type Enter** | Off: the paste stays on one line and Enter is never pressed - safe in chat apps. On: line breaks become real Enters, plus one after the last character. |
 | ⚡ **Adjustable speed** | Sliders for keystroke delay and initial delay (1-4000ms). Drag the speed slider all the way down for **turbo**, which drops the pause between keystrokes entirely - roughly ten times faster than the old fastest setting, because Windows rounds any non-zero pause up to a timer tick of about 15ms. |
 | ⬆ **Update notification** | Checks GitHub on start and shows an in-app banner plus a tray entry, but only when a newer stable release actually exists. |
@@ -114,7 +114,7 @@ While the panel is closed the window is click-through, so the bar never intercep
 
 ### While and after pasting
 
-The panel comes back up while the typing runs, so you can watch the progress counter, and tucks itself away once it is done. Your cursor is sitting in the target window at that point, so leaving it open would only be in the way - one flick to the left edge and you are ready for the next paste.
+The panel stays up for the whole operation - from the moment you pick an item, through aiming at the target, to the last character typed - so there is always something on screen telling you where you are. It tucks itself away once the paste is done. Your cursor is sitting in the target window at that point, so leaving it open would only be in the way - one flick to the left edge and you are ready for the next paste.
 
 ---
 
@@ -126,6 +126,7 @@ Open settings by clicking the gear icon inside the panel. Settings changes apply
 |---------|---------|---------|--------------|
 | **Typing speed** | turbo, or 1 – 150ms | 1ms | Pause between keystrokes. `turbo` (slider fully left) removes the pause altogether: much faster, but a slow remote console may not keep up. Anything above 0 is rounded up by Windows to roughly 15ms. |
 | **Initial delay** | 1 – 4000ms slider + exact field | 1ms | Wait after clicking the target, before the first keystroke |
+| **Break typing with** | mouse / esc | mouse | How to stop a paste half way. `mouse`: any movement cancels - the only one that works in RDP. `esc`: leaves the mouse free, but a remote session may swallow the key |
 | **Auto type Enter** | Toggle | Off | Off: everything on one line, Enter is never pressed. On: line breaks become Enters, plus one at the end |
 | **Start with Windows** | Toggle | On | Launch 0xpaste automatically at login |
 | **Max history** | 10 / 25 / 50 / 75 | 50 | Items kept in history - oldest unpinned removed when full |
