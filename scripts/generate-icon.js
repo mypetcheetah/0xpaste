@@ -1,9 +1,12 @@
 /**
  * generate-icon.js
- * Converts root icon.png into src/assets/icon.ico (multi-resolution)
- * and copies the PNG.
+ * Renders assets/icon.svg into the raster icons the app and the installer
+ * need: src/assets/icon.png (tray, window) and src/assets/icon.ico
+ * (executable, NSIS installer and uninstaller).
  *
- * Run: node scripts/generate-icon.js
+ * The SVG is the only source - there is no master PNG to keep in sync.
+ *
+ * Run: npm run setup-icon
  * Requires: npm install (png-to-ico and sharp are devDependencies)
  */
 
@@ -12,61 +15,52 @@
 const path = require('path');
 const fs   = require('fs');
 
-const ROOT        = path.join(__dirname, '..');
-const SRC_PNG     = path.join(ROOT, 'icon.png');
-const ASSETS_DIR  = path.join(ROOT, 'src', 'assets');
-const DEST_PNG    = path.join(ASSETS_DIR, 'icon.png');
-const DEST_ICO    = path.join(ASSETS_DIR, 'icon.ico');
+const ROOT       = path.join(__dirname, '..');
+const SRC_SVG    = path.join(ROOT, 'assets', 'icon.svg');
+const ASSETS_DIR = path.join(ROOT, 'src', 'assets');
+const DEST_PNG   = path.join(ASSETS_DIR, 'icon.png');
+const DEST_ICO   = path.join(ASSETS_DIR, 'icon.ico');
+
+const PNG_SIZE  = 512;
+const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
 
 async function main() {
-  // Ensure assets directory exists
   fs.mkdirSync(ASSETS_DIR, { recursive: true });
 
-  if (!fs.existsSync(SRC_PNG)) {
-    console.error('[generate-icon] icon.png not found at project root.');
+  if (!fs.existsSync(SRC_SVG)) {
+    console.error('[generate-icon] assets/icon.svg not found.');
     process.exit(1);
   }
 
-  // Copy PNG to assets
-  fs.copyFileSync(SRC_PNG, DEST_PNG);
-  console.log('[generate-icon] Copied icon.png -> src/assets/icon.png');
-
-  // Generate ICO with multiple sizes using sharp + png-to-ico
-  let pngToIco;
-  let sharp;
-
+  let pngToIco, sharp;
   try {
     pngToIco = require('png-to-ico');
+    sharp    = require('sharp');
   } catch (e) {
-    console.error('[generate-icon] png-to-ico not found. Run: npm install');
+    console.error('[generate-icon] png-to-ico or sharp not found. Run: npm install');
     process.exit(1);
   }
 
-  try {
-    sharp = require('sharp');
-  } catch (e) {
-    console.error('[generate-icon] sharp not found. Run: npm install');
-    process.exit(1);
-  }
+  const svg = fs.readFileSync(SRC_SVG);
 
-  // Resize to standard ICO sizes
-  const sizes = [16, 32, 48, 64, 128, 256];
+  // Rasterise straight from the SVG at each size rather than downscaling one
+  // big bitmap, so the small ones stay crisp where it matters most.
+  const render = (size) => sharp(svg, { density: 384 })
+    .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+
+  fs.writeFileSync(DEST_PNG, await render(PNG_SIZE));
+  console.log(`[generate-icon] Wrote src/assets/icon.png (${PNG_SIZE}x${PNG_SIZE})`);
+
   const buffers = [];
-
-  for (const size of sizes) {
-    // Transparent padding - keeps the logo's own alpha so the tray, taskbar
-    // and installer show the shape itself instead of a dark square behind it.
-    const buf = await sharp(SRC_PNG)
-      .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .png()
-      .toBuffer();
-    buffers.push(buf);
-    console.log(`[generate-icon] Resized ${size}x${size}`);
+  for (const size of ICO_SIZES) {
+    buffers.push(await render(size));
+    console.log(`[generate-icon] Rendered ${size}x${size}`);
   }
 
-  const icoBuf = await pngToIco(buffers);
-  fs.writeFileSync(DEST_ICO, icoBuf);
-  console.log('[generate-icon] Created src/assets/icon.ico');
+  fs.writeFileSync(DEST_ICO, await pngToIco(buffers));
+  console.log('[generate-icon] Wrote src/assets/icon.ico');
   console.log('[generate-icon] Done!');
 }
 
