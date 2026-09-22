@@ -11,7 +11,7 @@ Copy anything. Find it later. Type it anywhere, even where Ctrl+V doesn't work.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-26-47848F?style=flat-square&logo=electron&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.1.0-7C3AED?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.0-7C3AED?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-22C55E?style=flat-square)
 ![Built with JS](https://img.shields.io/badge/built%20with-vanilla%20JS-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
 
@@ -25,7 +25,7 @@ Copy anything. Find it later. Type it anywhere, even where Ctrl+V doesn't work.
 
 ## What is 0xpaste?
 
-0xpaste is a lightweight clipboard history manager that sits in your Windows system tray and pops up in the corner of your screen with a hotkey. It tracks everything you copy and lets you paste into any text field by clicking or dragging, using PowerShell `SendKeys` to simulate actual keystrokes - no native modules required.
+0xpaste is a lightweight clipboard history manager that lives as a thin bar against the left edge of your screen. Hover the bar and the panel slides out; move away and it tucks itself back. No hotkey to remember, nothing in your way. It tracks everything you copy and lets you paste into any text field by clicking or dragging, using PowerShell `SendKeys` to simulate actual keystrokes - no native modules required.
 
 This means it works in places where normal Ctrl+V is blocked: **remote desktop sessions, VMs, browser-based consoles** (vSphere, iDRAC, etc.), and any app that doesn't handle clipboard paste properly.
 
@@ -35,10 +35,13 @@ This means it works in places where normal Ctrl+V is blocked: **remote desktop s
 
 | | |
 |---|---|
+| 🪄 **Hover to open** | A slim bar sits at the left edge of your screen. Hover it and the panel slides out; move off and it slides back. While collapsed it is completely click-through - everything underneath stays clickable. |
+| 🖥️ **Pick your monitors** | Choose exactly which screens carry the bar, one or all of them. Each gets its own panel, all sharing the same history. |
 | 📋 **Clipboard history** | Auto-tracks everything you copy. Pinned items float to the top, unpinned rotate FIFO. |
 | ⌨️ **Click to type** | Click an item, click a target field, and 0xpaste types it out keystroke by keystroke. |
 | 🖱️ **Drag to type** | Drag an item directly to any text field on any monitor. |
-| 🖥️ **Multi-monitor** | One capture window per display - drop targets work on all screens. |
+| 🎯 **Drop anywhere** | One capture window per display - drop targets work on all screens. |
+| 📌 **Pin the panel** | `[pin]` keeps the panel open while you work in it, so the colour picker and sliders cannot close it by accident. |
 | 🔍 **Live search** | Instantly filter your history as you type. |
 | 📌 **Pin items** | Prevent important items from being rotated out of history. |
 | 🔒 **Password masking** | Items that look like passwords are auto-detected and masked by default - shows first 4 chars + blurred dots. Eye icon reveals full text. |
@@ -87,7 +90,11 @@ See [Building from Source](#building-from-source) below.
 
 ## Usage
 
-Once installed, 0xpaste runs in the system tray. Toggle the panel with the hotkey (`Ctrl + Space` by default).
+Once installed, 0xpaste runs in the system tray and parks a thin bar against the left edge of your screen.
+
+**Move your mouse onto the bar and the panel slides open. Move away and it closes again.** That is the whole interaction - there is no keyboard shortcut to learn.
+
+While the panel is closed the window is click-through, so the bar never intercepts a click meant for whatever is underneath it. Don't want the bar at all for a while? Left-click the tray icon to hide it, and again to bring it back.
 
 ### Panel controls
 
@@ -102,16 +109,18 @@ Once installed, 0xpaste runs in the system tray. Toggle the panel with the hotke
 | **Clear history** | Click `[clear all]`, confirm with second click |
 | **Search** | Type in the search bar at the top |
 | **Open settings** | Click the gear icon in the top-right of the panel |
+| **Keep it open** | Click `[pin]` - the panel then stays out until you click it again |
+| **Hide the bar** | Left-click the tray icon (or tray menu -> Hide bar) |
 
 ### After pasting
 
-The panel **stays open** after typing so you can immediately paste the next item.
+The bar comes straight back, collapsed. Your cursor is sitting in the target window at that point, so an open panel would only be in the way - one flick to the left edge and you are ready for the next paste.
 
 ---
 
 ## Settings Reference
 
-Open settings by clicking the gear icon inside the overlay.
+Open settings by clicking the gear icon inside the panel. Settings changes apply to every monitor's panel at once.
 
 | Setting | Options | Default | What it does |
 |---------|---------|---------|--------------|
@@ -120,9 +129,8 @@ Open settings by clicking the gear icon inside the overlay.
 | **Auto type Enter** | Toggle | Off | Off: everything on one line, Enter is never pressed. On: line breaks become Enters, plus one at the end |
 | **Start with Windows** | Toggle | On | Launch 0xpaste automatically at login |
 | **Max history** | 10 / 25 / 50 / 75 | 50 | Items kept in history - oldest unpinned removed when full |
-| **Hotkey** | Any combo with modifier | `Ctrl + Space` | Press `set` then your desired key combo |
+| **Show bar on** | One row per detected monitor | Primary only | Which screens carry the bar. At least one stays selected. |
 | **Accent color** | Color picker | `#7C3AED` | Primary UI color - all elements including glows update live |
-| **Panel position** | ↖ ↗ ↙ ↘ | ↘ | Corner of the primary display to snap to |
 | **Theme** | Default / White / Glass / Dark | Default | Visual theme for the panel |
 
 Settings are stored in `%APPDATA%\0xpaste\config.json`.
@@ -192,16 +200,17 @@ The installer outputs to `dist/0xpaste Setup 1.1.0.exe`.
 │   │   ├── main.js               # App entry, window management, IPC
 │   │   ├── clipboard-monitor.js  # Polls clipboard every 500ms, scores passwords
 │   │   ├── typing-engine.js      # PowerShell SendKeys implementation
-│   │   ├── hotkey.js             # globalShortcut management
+│   │   ├── escape-key.js         # Escape handling while the drop overlay is up
 │   │   ├── settings-store.js     # electron-store schema + helpers
 │   │   └── tray.js               # System tray icon + context menu
 │   ├── passwordDetector.js       # Password scoring heuristics
+│   ├── shared/
+│   │   └── dock-geometry.js      # Bar/panel dimensions shared by main + renderer
 │   ├── preload/
-│   │   ├── preload.js            # Overlay IPC bridge
-│   │   ├── capture-preload.js    # Capture window IPC bridge
-│   │   └── settings-preload.js   # Settings window IPC bridge
+│   │   ├── preload.js            # Dock panel IPC bridge
+│   │   └── capture-preload.js    # Capture window IPC bridge
 │   └── renderer/
-│       ├── overlay/              # Main panel UI (history, search, inline settings)
+│       ├── overlay/              # Dock panel UI (history, search, inline settings)
 │       └── capture/              # Fullscreen transparent drop target
 ├── scripts/
 │   ├── generate-icon.js          # Converts root icon.png to ICO (multi-res)

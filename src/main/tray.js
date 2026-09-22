@@ -4,32 +4,41 @@ const { Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 
 let trayInstance   = null;
-let _onToggle      = null;
+let _onToggleBar   = null;
 let _onQuit        = null;
 let _onCancelType  = null;
-let _updateVersion = null;  // e.g. 'v1.0.5'
+let _updateVersion = null;  // e.g. 'v1.1.0'
 let _onOpenUpdate  = null;
+let _barVisible    = true;
+let _typing        = false;
 
-function buildMenu(typing) {
+function buildMenu() {
   const items = [];
 
   if (_updateVersion) {
     items.push({
-      label: `⬆ Update available (${_updateVersion}) - click to download`,
+      label: 'Update available (' + _updateVersion + ') - click to download',
       type: 'normal',
       click: () => { if (_onOpenUpdate) _onOpenUpdate(); }
     });
     items.push({ type: 'separator' });
   }
 
-  if (typing) {
+  if (_typing) {
     items.push({
-      label: '⬛ Stop typing',
+      label: 'Stop typing',
       type: 'normal',
       click: () => { if (_onCancelType) _onCancelType(); }
     });
     items.push({ type: 'separator' });
   }
+
+  items.push({
+    label: _barVisible ? 'Hide bar' : 'Show bar',
+    type: 'normal',
+    click: () => { if (_onToggleBar) _onToggleBar(); }
+  });
+  items.push({ type: 'separator' });
 
   items.push({
     label: 'Quit 0xpaste',
@@ -40,8 +49,20 @@ function buildMenu(typing) {
   return Menu.buildFromTemplate(items);
 }
 
-function createTray(onToggle, onOpenSettings, onQuit, onCancelType) {
-  _onToggle     = onToggle;
+function refresh() {
+  if (!trayInstance) return;
+  trayInstance.setContextMenu(buildMenu());
+}
+
+function tooltip() {
+  if (_typing)        return '0xpaste - typing... (right-click to stop)';
+  if (_updateVersion) return '0xpaste - Update available: ' + _updateVersion;
+  if (!_barVisible)   return '0xpaste - bar hidden (click to show)';
+  return '0xpaste - hover the left edge of your screen';
+}
+
+function createTray({ onToggleBar, onQuit, onCancelType }) {
+  _onToggleBar  = onToggleBar;
   _onQuit       = onQuit;
   _onCancelType = onCancelType;
 
@@ -49,30 +70,37 @@ function createTray(onToggle, onOpenSettings, onQuit, onCancelType) {
   const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
 
   trayInstance = new Tray(icon);
-  trayInstance.setToolTip('0xpaste - clipboard history');
-  trayInstance.setContextMenu(buildMenu(false));
+  trayInstance.setToolTip(tooltip());
+  trayInstance.setContextMenu(buildMenu());
 
-  // Left-click toggles overlay
+  // Left-click shows or hides the bar
   trayInstance.on('click', () => {
-    if (_onToggle) _onToggle();
+    if (_onToggleBar) _onToggleBar();
   });
 
   return trayInstance;
 }
 
 function setTypingMode(active) {
+  _typing = !!active;
   if (!trayInstance) return;
-  const base = _updateVersion ? `0xpaste - Update available: ${_updateVersion}` : '0xpaste - clipboard history';
-  trayInstance.setToolTip(active ? '0xpaste - typing… (right-click to stop)' : base);
-  trayInstance.setContextMenu(buildMenu(active));
+  trayInstance.setToolTip(tooltip());
+  refresh();
+}
+
+function setBarVisible(visible) {
+  _barVisible = !!visible;
+  if (!trayInstance) return;
+  trayInstance.setToolTip(tooltip());
+  refresh();
 }
 
 function setUpdateAvailable(version, onOpen) {
   _updateVersion = version;
   _onOpenUpdate  = onOpen;
   if (!trayInstance) return;
-  trayInstance.setToolTip(`0xpaste - Update available: ${version}`);
-  trayInstance.setContextMenu(buildMenu(false));
+  trayInstance.setToolTip(tooltip());
+  refresh();
 }
 
 function destroyTray() {
@@ -86,4 +114,4 @@ function getTray() {
   return trayInstance;
 }
 
-module.exports = { createTray, destroyTray, getTray, setTypingMode, setUpdateAvailable };
+module.exports = { createTray, destroyTray, getTray, setTypingMode, setBarVisible, setUpdateAvailable };

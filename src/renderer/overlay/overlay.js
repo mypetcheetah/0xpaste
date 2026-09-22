@@ -37,58 +37,195 @@ const cancelHint     = document.getElementById('cancel-hint');
 const settingsBtn    = document.getElementById('settings-btn');
 const clipboardView  = document.getElementById('clipboard-view');
 const settingsView   = document.getElementById('settings-view');
-const headerHotkey   = document.getElementById('header-hotkey');
 const resetBtn       = document.getElementById('reset-defaults-btn');
+const root           = document.getElementById('overlay-root');
+const headerMonitor  = document.getElementById('header-monitor');
+const pinBtn         = document.getElementById('pin-btn');
 
 // ============================================================
 // Settings toggle
 // ============================================================
-settingsBtn.addEventListener('click', () => {
-  settingsVisible = !settingsVisible;
-  settingsBtn.classList.toggle('active', settingsVisible);
-  clipboardView.style.display = settingsVisible ? 'none' : '';
-  settingsView.classList.toggle('visible', settingsVisible);
-  resetBtn.classList.toggle('visible', settingsVisible);
-});
+function setSettingsView(on) {
+  settingsVisible = on;
+  settingsBtn.classList.toggle('active', on);
+  clipboardView.style.display = on ? 'none' : '';
+  settingsView.classList.toggle('visible', on);
+  resetBtn.classList.toggle('visible', on);
+}
+
+settingsBtn.addEventListener('click', () => setSettingsView(!settingsVisible));
 
 // ============================================================
-// Overlay show / hide (driven by main)
+// Dock: hover the bar to open, move away to close
 // ============================================================
-api.onOverlayShow(() => {
-  _overlayOpen = true;
-  panel.classList.remove('hiding');
-  // Force reflow so transition fires
-  void panel.offsetWidth;
-  panel.classList.add('visible');
-  searchInput.focus();
+// The window itself is always there, parked against the left edge and
+// click-through while collapsed. Main flips it to interactive when this
+// renderer asks to expand, so the policy lives here and the window state
+// lives there - they can never disagree because main echoes every change
+// back through dock:set-expanded.
+
+const GEO = window.DOCK_GEO;
+
+// Mirror the geometry into CSS so the stylesheet and the hit tests agree
+(function applyGeometry() {
+  const s = document.documentElement.style;
+  s.setProperty('--panel-w',    GEO.PANEL_W + 'px');
+  s.setProperty('--panel-h',    GEO.PANEL_H + 'px');
+  s.setProperty('--shadow-pad', GEO.SHADOW  + 'px');
+  s.setProperty('--tab-w',      GEO.TAB_W   + 'px');
+  s.setProperty('--tab-h',      GEO.TAB_H   + 'px');
+})();
+
+let expanded      = false;
+let pinned        = false;
+let peeking       = false;
+let pointerDown   = false;
+let armTimer      = null;
+let peekTimer     = null;
+let collapseTimer = null;
+
+// The bar sits against the left edge, vertically centred in the window.
+function inTabZone(x, y) {
+  const midY  = window.innerHeight / 2;
+  const halfH = (GEO.TAB_H / 2) + GEO.HOT_PAD_Y;
+  return x <= GEO.TAB_W + GEO.HOT_PAD_X && y >= midY - halfH && y <= midY + halfH;
+}
+
+// Panel rect inside the window, with slack so a brief overshoot while
+// reaching for a control does not slam it shut.
+function inPanelZone(x, y) {
+  const g = GEO.GRACE;
+  return x >= -g && x <= GEO.PANEL_W + g &&
+         y >= GEO.SHADOW - g && y <= GEO.SHADOW + GEO.PANEL_H + g;
+}
+
+function endPeek() {
+  if (peekTimer) { clearTimeout(peekTimer); peekTimer = null; }
+  peeking = false;
+}
+
+function disarm() {
+  if (armTimer) { clearTimeout(armTimer); armTimer = null; }
+  root.classList.remove('armed');
+}
+
+// A short intent delay keeps a quick sweep along the screen edge from
+// yanking the panel open; the bar lights up immediately either way.
+function armExpand() {
+  if (expanded || armTimer) return;
+  root.classList.add('armed');
+  armTimer = setTimeout(() => {
+    armTimer = null;
+    requestExpand();
+  }, GEO.HOVER_INTENT);
+}
+
+function requestExpand() {
+  clearTimeout(collapseTimer);
+  collapseTimer = null;
+  disarm();
+  endPeek();
+  if (expanded) return;
+  api.dockExpand();
+}
+
+function requestCollapse() {
+  if (pinned || drag.active || pointerDown) return;
+  if (!expanded && !peeking) return;
+  if (collapseTimer) return;
+  collapseTimer = setTimeout(() => {
+    collapseTimer = null;
+    if (pinned || drag.active || pointerDown) return;
+    endPeek();
+    api.dockCollapse();
+  }, GEO.COLLAPSE_DELAY);
+}
+
+// Main is the single source of truth for the expanded state
+api.onDockExpanded((on) => {
+  expanded = !!on;
+  disarm();
+  root.classList.toggle('expanded', expanded);
+
+  if (!expanded) {
+    endPeek();
+    setPinned(false);
+    setSettingsView(false);
+    clearSearch();
+    selectedItemId = null;
+    renderList();
+  }
 });
 
-api.onOverlayHide(() => {
-  const finish = (() => {
-    let done = false;
-    return () => {
-      if (done) return;
-      done = true;
-      panel.classList.remove('hiding');
-      _overlayOpen = false;
-      api.hideOverlayDone();
-      clearSearch();
-      selectedItemId = null;
-    };
-  })();
+// Backstop from main: the real cursor left this window. Main only reports
+// it - whether that should close anything is decided right here.
+api.onDockCursorOut(() => requestCollapse());
 
-  // If panel isn't visible, transitionend won't fire - ack immediately.
-  if (!panel.classList.contains('visible')) {
-    finish();
+// Short look-at-me on launch so the bar is easy to find
+api.onDockPeek(() => {
+  if (expanded || pinned) return;
+  peeking = true;
+  root.classList.add('expanded');
+  clearTimeout(peekTimer);
+  peekTimer = setTimeout(() => {
+    peekTimer = null;
+    if (peeking && !expanded) {
+      peeking = false;
+      root.classList.remove('expanded');
+    }
+  }, GEO.PEEK_MS);
+});
+
+// Which monitor this copy of the bar lives on
+api.onDockInfo(({ index, total }) => {
+  if (!headerMonitor) return;
+  headerMonitor.textContent = total > 1 ? 'monitor ' + index + '/' + total : '';
+});
+
+document.addEventListener('mousemove', (e) => {
+  // Self-heal: a button released outside the window never reaches us
+  if (pointerDown && e.buttons === 0) pointerDown = false;
+
+  if (expanded || peeking) {
+    if (inPanelZone(e.clientX, e.clientY)) {
+      clearTimeout(collapseTimer);
+      collapseTimer = null;
+      if (peeking) requestExpand(); // reaching for it during the peek takes over
+    } else if (!inTabZone(e.clientX, e.clientY)) {
+      requestCollapse();
+    }
     return;
   }
 
-  panel.classList.remove('visible');
-  panel.classList.add('hiding');
-  panel.addEventListener('transitionend', finish, { once: true });
-  // Fallback in case transitionend never fires
-  setTimeout(finish, 400);
+  if (inTabZone(e.clientX, e.clientY)) {
+    armExpand();
+  } else {
+    disarm();
+  }
 });
+
+document.addEventListener('mouseleave', () => {
+  disarm();
+  requestCollapse();
+});
+
+document.addEventListener('mousedown', () => { pointerDown = true; });
+document.addEventListener('mouseup',   () => { pointerDown = false; });
+window.addEventListener('blur',        () => { pointerDown = false; });
+
+// ---- Pin ----
+function setPinned(on) {
+  pinned = !!on;
+  if (pinBtn) {
+    pinBtn.classList.toggle('active', pinned);
+    pinBtn.textContent = pinned ? '[pinned]' : '[pin]';
+  }
+  api.dockPin(pinned);
+}
+
+if (pinBtn) {
+  pinBtn.addEventListener('click', () => setPinned(!pinned));
+}
 
 // ============================================================
 // Clipboard history
@@ -96,6 +233,14 @@ api.onOverlayHide(() => {
 api.onInitialHistory((h) => {
   history = h;
   // Auto-mask items flagged as passwords
+  history.forEach(item => { if (item.isPassword) hiddenItems.add(item.id); });
+  renderList();
+  updateStatus();
+});
+
+// Another dock deleted or cleared something - take its word for the new list
+api.onRefreshHistory((h) => {
+  history = h;
   history.forEach(item => { if (item.isPassword) hiddenItems.add(item.id); });
   renderList();
   updateStatus();
@@ -153,6 +298,13 @@ api.onTypingDone(({ cancelled } = {}) => {
 // ============================================================
 api.onAccentColor((color) => {
   applyAccentColor(color);
+  const input = document.getElementById('accent-color-input');
+  if (input) input.value = color;
+});
+
+api.onTheme((theme) => {
+  applyTheme(theme);
+  setSegGroup('theme-group', theme);
 });
 
 // ============================================================
@@ -426,7 +578,6 @@ document.addEventListener('mouseup', (e) => {
 // Settings - theme helper + WebGL glass renderer lifecycle
 // ============================================================
 let _glassInited  = false;
-let _overlayOpen  = false;
 
 function _glassInit() {
   if (_glassInited || !window.glassRenderer) return false;
@@ -455,11 +606,6 @@ function _glassCapture() {
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme || 'default');
-}
-
-function applySlideDirection(pos) {
-  const isLeft = pos === 'top-left' || pos === 'bottom-left';
-  panel.classList.toggle('slide-left', isLeft);
 }
 
 // ============================================================
@@ -513,116 +659,79 @@ function applyAccentColor(hex) {
 }
 
 // ============================================================
-// Settings - hotkey display helper
+// Settings - monitor picker
 // ============================================================
-function acceleratorToDisplay(acc) {
-  return acc
-    .replace(/CommandOrControl/g, 'ctrl')
-    .replace(/CmdOrCtrl/g, 'ctrl')
-    .replace(/Ctrl/g, 'ctrl')
-    .replace(/Alt/g, 'alt')
-    .replace(/Shift/g, 'shift')
-    .replace(/Super/g, 'win')
-    .replace(/\+/g, ' + ')
-    .toLowerCase();
+const MONITOR_HINT = 'the bar appears on every selected monitor';
+
+function setMonitorHint(text, warn) {
+  const hint = document.getElementById('monitor-hint');
+  if (!hint) return;
+  hint.textContent = text;
+  hint.classList.toggle('warn', !!warn);
 }
 
-// ============================================================
-// Settings - hotkey capture
-// ============================================================
-let capturingHotkey = false;
-let hotkeyKeydownHandler = null;
+async function renderMonitors() {
+  const list = document.getElementById('monitor-list');
+  if (!list) return;
 
-function startHotkeyCapture() {
-  if (capturingHotkey) return;
-  capturingHotkey = true;
-
-  const display = document.getElementById('hotkey-display');
-  const btn     = document.getElementById('hotkey-capture-btn');
-
-  display.textContent = 'press keys...';
-  display.classList.add('capturing');
-  btn.textContent = 'cancel';
-
-  // Temporarily disable global hotkey so it doesn't interfere
-  api.hotkeyCapture(true);
-
-  // Cancel if overlay loses focus
-  window.addEventListener('blur', cancelHotkeyCapture, { once: true });
-
-  hotkeyKeydownHandler = (e) => {
-    // Only modifier keys pressed - wait
-    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (e.key === 'Escape') {
-      cancelHotkeyCapture();
-      return;
-    }
-
-    // Require at least one modifier
-    if (!e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) return;
-
-    const parts = [];
-    if (e.ctrlKey)  parts.push('Ctrl');
-    if (e.altKey)   parts.push('Alt');
-    if (e.shiftKey) parts.push('Shift');
-    if (e.metaKey)  parts.push('Super');
-
-    const specialKeys = {
-      'ArrowUp': 'Up', 'ArrowDown': 'Down', 'ArrowLeft': 'Left', 'ArrowRight': 'Right',
-      'Enter': 'Return', ' ': 'Space',
-      'F1': 'F1', 'F2': 'F2', 'F3': 'F3', 'F4': 'F4', 'F5': 'F5', 'F6': 'F6',
-      'F7': 'F7', 'F8': 'F8', 'F9': 'F9', 'F10': 'F10', 'F11': 'F11', 'F12': 'F12',
-      'Backspace': 'Backspace', 'Delete': 'Delete', 'Tab': 'Tab',
-      'Insert': 'Insert', 'Home': 'Home', 'End': 'End',
-      'PageUp': 'PageUp', 'PageDown': 'PageDown'
-    };
-
-    const key = specialKeys[e.key] ?? (e.key.length === 1 ? e.key : e.key);
-    parts.push(key);
-
-    const accelerator = parts.join('+');
-
-    // Stop capture
-    document.removeEventListener('keydown', hotkeyKeydownHandler, true);
-    window.removeEventListener('blur', cancelHotkeyCapture);
-    capturingHotkey = false;
-
-    display.textContent = acceleratorToDisplay(accelerator);
-    display.classList.remove('capturing');
-    btn.textContent = 'set';
-
-    // Save - main will re-register the new hotkey via settings:update handler
-    api.updateSetting('hotkey', accelerator);
-
-    // Update header display
-    if (headerHotkey) headerHotkey.textContent = `toggle: ${acceleratorToDisplay(accelerator)}`;
-  };
-
-  document.addEventListener('keydown', hotkeyKeydownHandler, true);
-}
-
-function cancelHotkeyCapture() {
-  if (!capturingHotkey) return;
-  capturingHotkey = false;
-
-  if (hotkeyKeydownHandler) {
-    document.removeEventListener('keydown', hotkeyKeydownHandler, true);
-    hotkeyKeydownHandler = null;
+  let displays;
+  try {
+    displays = await api.listDisplays();
+  } catch (_) {
+    return;
   }
-  window.removeEventListener('blur', cancelHotkeyCapture);
 
-  const display = document.getElementById('hotkey-display');
-  const btn     = document.getElementById('hotkey-capture-btn');
-  if (display) display.classList.remove('capturing');
-  if (btn)     btn.textContent = 'set';
+  list.innerHTML = '';
+  for (const d of displays) {
+    const btn = document.createElement('button');
+    btn.className   = 'monitor-btn' + (d.selected ? ' active' : '');
+    btn.dataset.id  = d.id;
+    btn.innerHTML   =
+      '<span class="mon-name"><span class="mon-check">[x]</span>monitor ' + d.index + '</span>' +
+      '<span class="mon-meta">' + d.width + 'x' + d.height + (d.primary ? ' / primary' : '') + '</span>';
+    btn.addEventListener('click', () => toggleMonitor(d.id));
+    list.appendChild(btn);
+  }
 
-  // Tell main to re-register old hotkey
-  api.hotkeyCapture(false);
+  updateMonitorSummary();
+  setMonitorHint(MONITOR_HINT, false);
 }
+
+function updateMonitorSummary() {
+  const list    = document.getElementById('monitor-list');
+  const summary = document.getElementById('monitor-summary');
+  if (!list || !summary) return;
+  const all = list.querySelectorAll('.monitor-btn');
+  const on  = list.querySelectorAll('.monitor-btn.active');
+  summary.textContent = on.length + ' of ' + all.length;
+}
+
+function toggleMonitor(id) {
+  const list = document.getElementById('monitor-list');
+  if (!list) return;
+
+  const btns   = Array.from(list.querySelectorAll('.monitor-btn'));
+  const target = btns.find(b => b.dataset.id === id);
+  if (!target) return;
+
+  const turnOn   = !target.classList.contains('active');
+  const selected = btns.filter(b => b.classList.contains('active')).map(b => b.dataset.id);
+  const next     = turnOn ? selected.concat([id]) : selected.filter(x => x !== id);
+
+  // The bar has to live somewhere - refuse to switch off the last one
+  if (!next.length) {
+    setMonitorHint('at least one monitor has to stay selected', true);
+    return;
+  }
+
+  api.setDisplays(next);
+  target.classList.toggle('active', turnOn);
+  updateMonitorSummary();
+  setMonitorHint(MONITOR_HINT, false);
+}
+
+// A monitor was plugged in or unplugged, or another dock changed the choice
+api.onDisplaysChanged(() => renderMonitors());
 
 // ============================================================
 // Settings - reset to defaults
@@ -633,9 +742,7 @@ const DEFAULTS = {
   autoEnter:      false,
   startWithWindows: true,
   maxHistory:     50,
-  hotkey:         'CommandOrControl+Space',
   accentColor:    '#7C3AED',
-  panelPosition:  'bottom-right',
   theme:          'default'
 };
 
@@ -684,15 +791,10 @@ resetBtn.addEventListener('click', () => {
   setSegGroup('history-group', DEFAULTS.maxHistory);
   maxHistory = DEFAULTS.maxHistory;
 
-  const hotkeyDisplay = document.getElementById('hotkey-display');
-  if (hotkeyDisplay) hotkeyDisplay.textContent = acceleratorToDisplay(DEFAULTS.hotkey);
-  if (headerHotkey)  headerHotkey.textContent  = `toggle: ${acceleratorToDisplay(DEFAULTS.hotkey)}`;
-
   const colorInput = document.getElementById('accent-color-input');
   if (colorInput) { colorInput.value = DEFAULTS.accentColor; applyAccentColor(DEFAULTS.accentColor); }
 
-  setSegGroup('position-group', DEFAULTS.panelPosition);
-  applySlideDirection(DEFAULTS.panelPosition);
+  // The monitor choice is placement, not styling - reset leaves it alone.
 
   setSegGroup('theme-group', DEFAULTS.theme);
   applyTheme(DEFAULTS.theme);
@@ -793,26 +895,8 @@ function initSettings(settings) {
     api.updateSetting('maxHistory', maxHistory);
   });
 
-  // Hotkey display
-  const hotkeyDisplay = document.getElementById('hotkey-display');
-  if (hotkeyDisplay && settings.hotkey) {
-    hotkeyDisplay.textContent = acceleratorToDisplay(settings.hotkey);
-  }
-  if (headerHotkey && settings.hotkey) {
-    headerHotkey.textContent = `toggle: ${acceleratorToDisplay(settings.hotkey)}`;
-  }
-
-  // Hotkey capture button
-  const captureBtn = document.getElementById('hotkey-capture-btn');
-  if (captureBtn) {
-    captureBtn.addEventListener('click', () => {
-      if (capturingHotkey) {
-        cancelHotkeyCapture();
-      } else {
-        startHotkeyCapture();
-      }
-    });
-  }
+  // Monitors the bar lives on
+  renderMonitors();
 
   // Accent color
   const colorInput = document.getElementById('accent-color-input');
@@ -829,13 +913,6 @@ function initSettings(settings) {
       }, 400);
     });
   }
-
-  // Panel position
-  applySlideDirection(settings.panelPosition);
-  initSegGroup('position-group', settings.panelPosition, (val) => {
-    api.updateSetting('panelPosition', val);
-    applySlideDirection(val);
-  });
 
   // Theme
   applyTheme(settings.theme);

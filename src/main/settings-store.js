@@ -5,6 +5,10 @@ const Store = require('electron-store');
 // Schema ranges are a deliberate superset of every value older builds could
 // have stored, so a pre-existing config never fails validation on load. The
 // UI enforces the real, tighter ranges (initialDelay 1-4000, charDelay 1-200).
+//
+// Keys dropped in 1.2.0 - 'hotkey' and 'panelPosition' - may still sit in an
+// existing config.json. Extra properties are not rejected, so they are simply
+// ignored from here on.
 const schema = {
   initialDelay: {
     type: 'number',
@@ -28,17 +32,16 @@ const schema = {
     minimum: 10,
     maximum: 75
   },
-  hotkey: {
-    type: 'string',
-    default: 'CommandOrControl+Space'
-  },
   accentColor: {
     type: 'string',
     default: '#7C3AED'
   },
-  panelPosition: {
-    type: 'string',
-    default: 'bottom-right'
+  // Display ids the dock bar lives on. Empty means "primary display only",
+  // which is also the fallback when every stored id has disappeared.
+  dockDisplays: {
+    type: 'array',
+    items: { type: 'string' },
+    default: []
   },
   theme: {
     type: 'string',
@@ -58,9 +61,8 @@ const store = new Store({
     charDelay: 1,
     startWithWindows: true,
     maxHistory: 50,
-    hotkey: 'CommandOrControl+Space',
     accentColor: '#7C3AED',
-    panelPosition: 'bottom-right',
+    dockDisplays: [],
     theme: 'default',
     autoEnter: false
   }
@@ -72,9 +74,8 @@ function getSettings() {
     charDelay: store.get('charDelay'),
     startWithWindows: store.get('startWithWindows'),
     maxHistory: store.get('maxHistory'),
-    hotkey: store.get('hotkey'),
     accentColor: store.get('accentColor'),
-    panelPosition: store.get('panelPosition'),
+    dockDisplays: store.get('dockDisplays'),
     theme: store.get('theme'),
     autoEnter: store.get('autoEnter')
   };
@@ -82,7 +83,7 @@ function getSettings() {
 
 function updateSetting(key, value) {
   if (!(key in schema)) {
-    throw new Error(`Unknown setting key: ${key}`);
+    throw new Error('Unknown setting key: ' + key);
   }
   store.set(key, value);
 }
