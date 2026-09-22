@@ -21,9 +21,15 @@
     PANEL_W: 320,
     PANEL_H: 450,
 
-    // Transparent margin around the panel so the drop shadow has room.
-    // The window is PANEL_W + SHADOW wide and PANEL_H + 2*SHADOW tall.
-    SHADOW: 18,
+    // Transparent margin around the panel so the drop shadow has room to
+    // fade out instead of being clipped by the window edge. The panel sits
+    // flush against the screen edge, so its shadow is thrown to the right;
+    // nothing is needed on the left, where it would be off-screen anyway.
+    // Keep these >= the largest --panel-shadow extent of any theme
+    // (currently 48 right, 34 vertical).
+    // Window: PANEL_W + PAD_RIGHT wide, PANEL_H + 2*PAD_Y tall.
+    PAD_RIGHT: 52,
+    PAD_Y: 38,
 
     // Collapsed bar - the sliver that sticks out at the screen edge
     TAB_W: 8,

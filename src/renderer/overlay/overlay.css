@@ -28,14 +28,18 @@
   --success:          #22C55E;
   --font-brand:       'Silkscreen', 'Courier New', monospace;
   --font-mono:        'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Courier New', monospace;
-  --panel-shadow:     0 0 0 1px var(--accent-a15), 0 24px 48px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.4);
+  /* Thrown sideways, away from the screen edge the panel is docked against.
+     No vertical offset, so the top and bottom need the same room. Extents
+     stay within PAD_RIGHT / PAD_Y from src/shared/dock-geometry.js. */
+  --panel-shadow:     0 0 0 1px var(--accent-a15), 14px 0 34px rgba(0, 0, 0, 0.55), 4px 0 10px rgba(0, 0, 0, 0.4);
   --scrollbar-thumb:  rgba(0, 0, 0, 0.55);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.75);
   /* Dock geometry - overwritten at runtime from src/shared/dock-geometry.js.
      The values here are only a fallback so the stylesheet stands on its own. */
-  --panel-w:    320px;
-  --panel-h:    450px;
-  --shadow-pad: 18px;
+  --panel-w:   320px;
+  --panel-h:   450px;
+  --pad-right: 52px;
+  --pad-y:     38px;
   --tab-w:      8px;
   --tab-h:      160px;
 }
@@ -50,7 +54,7 @@
   --text-primary:     #1C1C1E;
   --text-secondary:   #6E6E73;
   --text-placeholder: #AEAEB2;
-  --panel-shadow:     0 0 0 1px var(--accent-a15), 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --panel-shadow:     0 0 0 1px var(--accent-a15), 12px 0 30px rgba(0, 0, 0, 0.13), 3px 0 8px rgba(0, 0, 0, 0.07);
   --scrollbar-thumb:  rgba(0, 0, 0, 0.18);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
 }
@@ -65,7 +69,7 @@
   --text-primary:     #FFFFFF;
   --text-secondary:   rgba(255, 255, 255, 0.70);
   --text-placeholder: rgba(255, 255, 255, 0.35);
-  --panel-shadow:     0 6px 6px rgba(0, 0, 0, 0.2), 0 0 20px rgba(0, 0, 0, 0.1);
+  --panel-shadow:     10px 0 24px rgba(0, 0, 0, 0.22), 0 0 20px rgba(0, 0, 0, 0.1);
   --scrollbar-thumb:  rgba(255, 255, 255, 0.18);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.35);
 }
@@ -84,7 +88,7 @@
   --text-primary:     #CDD6F4;
   --text-secondary:   #8A8AAE;
   --text-placeholder: #585879;
-  --panel-shadow:     0 0 0 1px var(--accent-a20), 0 24px 48px rgba(0, 0, 0, 0.5), 0 8px 16px rgba(0, 0, 0, 0.3);
+  --panel-shadow:     0 0 0 1px var(--accent-a20), 14px 0 34px rgba(0, 0, 0, 0.5), 4px 0 10px rgba(0, 0, 0, 0.3);
   --scrollbar-thumb:  rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
 }
@@ -206,7 +210,7 @@ html, body {
 #overlay-panel {
   position: absolute;
   left: 0;
-  top: var(--shadow-pad);
+  top: var(--pad-y);
   width: var(--panel-w);
   height: var(--panel-h);
   background: var(--bg-primary);
