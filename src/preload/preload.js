@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTypingDone: (cb) => ipcRenderer.on('typing:done', (_, data) => cb(data)),
   onAccentColor: (cb) => ipcRenderer.on('settings:accent-color', (_, color) => cb(color)),
   onTheme: (cb) => ipcRenderer.on('settings:theme', (_, theme) => cb(theme)),
+  onBreakTyping: (cb) => ipcRenderer.on('settings:break-typing', (_, mode) => cb(mode)),
   onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_, data) => cb(data)),
 
   // Glass theme: capture screenshot of the area behind the panel

@@ -51,6 +51,13 @@ const schema = {
   autoEnter: {
     type: 'boolean',
     default: false
+  },
+  // How a paste in progress can be stopped: 'mouse' (any movement) or
+  // 'escape'. Mouse is the default because it is the only one that survives
+  // an RDP session swallowing key presses.
+  breakTyping: {
+    type: 'string',
+    default: 'mouse'
   }
 };
 
@@ -65,7 +72,8 @@ const store = new Store({
     accentColor: '#7C3AED',
     dockDisplays: [],
     theme: 'default',
-    autoEnter: false
+    autoEnter: false,
+    breakTyping: 'mouse'
   }
 });
 
@@ -78,7 +86,8 @@ function getSettings() {
     accentColor: store.get('accentColor'),
     dockDisplays: store.get('dockDisplays'),
     theme: store.get('theme'),
-    autoEnter: store.get('autoEnter')
+    autoEnter: store.get('autoEnter'),
+    breakTyping: store.get('breakTyping')
   };
 }
 

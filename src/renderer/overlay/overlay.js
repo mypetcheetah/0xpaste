@@ -693,6 +693,32 @@ function applyAccentColor(hex) {
 }
 
 // ============================================================
+// Settings - how a paste gets stopped half way
+// ============================================================
+// The footer carries this permanently, so it has to say the truth about
+// whichever one is selected.
+const BREAK_HINT = {
+  mouse:  'any mouse movement stops the typing - the only one that works in RDP, where the remote session swallows Esc',
+  escape: 'Esc stops the typing, so the mouse is free to move - but a remote session may never let the key through'
+};
+
+function applyBreakTyping(mode) {
+  const byEscape = mode === 'escape';
+  const hint = document.getElementById('break-hint');
+  if (hint) hint.textContent = byEscape ? BREAK_HINT.escape : BREAK_HINT.mouse;
+  if (cancelHint) {
+    cancelHint.textContent = byEscape
+      ? 'Press Esc to cancel typing.'
+      : 'Move your mouse to cancel typing.';
+  }
+}
+
+api.onBreakTyping((mode) => {
+  applyBreakTyping(mode);
+  setSegGroup('break-group', mode);
+});
+
+// ============================================================
 // Settings - monitor picker
 // ============================================================
 const MONITOR_HINT = 'the bar appears on every selected monitor';
@@ -774,6 +800,7 @@ const DEFAULTS = {
   charDelay:      1,
   initialDelay:   1,
   autoEnter:      false,
+  breakTyping:    'mouse',
   startWithWindows: true,
   maxHistory:     50,
   accentColor:    '#7C3AED',
@@ -822,6 +849,9 @@ resetBtn.addEventListener('click', () => {
   // Auto enter
   const autoEnterToggle = document.getElementById('auto-enter-toggle');
   if (autoEnterToggle) autoEnterToggle.checked = DEFAULTS.autoEnter;
+
+  setSegGroup('break-group', DEFAULTS.breakTyping);
+  applyBreakTyping(DEFAULTS.breakTyping);
 
   const winToggle = document.getElementById('start-windows-toggle');
   if (winToggle) winToggle.checked = DEFAULTS.startWithWindows;
@@ -931,6 +961,14 @@ function initSettings(settings) {
   initSegGroup('history-group', settings.maxHistory, (val) => {
     maxHistory = parseInt(val, 10);
     api.updateSetting('maxHistory', maxHistory);
+  });
+
+  // How a paste gets stopped half way
+  const breakMode = settings.breakTyping === 'escape' ? 'escape' : 'mouse';
+  applyBreakTyping(breakMode);
+  initSegGroup('break-group', breakMode, (val) => {
+    api.updateSetting('breakTyping', val);
+    applyBreakTyping(val);
   });
 
   // Monitors the bar lives on
