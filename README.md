@@ -47,7 +47,7 @@ This means it works in places where normal Ctrl+V is blocked: **remote desktop s
 | 🔒 **Password masking** | Items that look like passwords are auto-detected and masked by default - shows first 4 chars + blurred dots. Eye icon reveals full text. |
 | 🚫 **Typing killswitch** | Move your mouse more than 80px during typing to cancel immediately - works in RDP where keyboard shortcuts are intercepted. |
 | ↵ **Auto-type Enter** | Off: the paste stays on one line and Enter is never pressed - safe in chat apps. On: line breaks become real Enters, plus one after the last character. |
-| ⚡ **Adjustable speed** | Sliders for keystroke delay (1-150ms) and initial delay (1-4000ms), both down to 1ms. |
+| ⚡ **Adjustable speed** | Sliders for keystroke delay and initial delay (1-4000ms). Drag the speed slider all the way down for **turbo**, which drops the pause between keystrokes entirely - roughly ten times faster than the old fastest setting, because Windows rounds any non-zero pause up to a timer tick of about 15ms. |
 | ⬆ **Update notification** | Checks GitHub on start and shows an in-app banner plus a tray entry, but only when a newer stable release actually exists. |
 | ⚙️ **Full settings panel** | All settings accessible from inside the overlay - no separate window needed. |
 | 🎨 **Live accent color** | Pick any color - the entire UI including glows, toggles, and borders update instantly. |
@@ -124,7 +124,7 @@ Open settings by clicking the gear icon inside the panel. Settings changes apply
 
 | Setting | Options | Default | What it does |
 |---------|---------|---------|--------------|
-| **Typing speed** | 1 – 150ms slider | 1ms | Delay between keystrokes - lower is faster |
+| **Typing speed** | turbo, or 1 – 150ms | 1ms | Pause between keystrokes. `turbo` (slider fully left) removes the pause altogether: much faster, but a slow remote console may not keep up. Anything above 0 is rounded up by Windows to roughly 15ms. |
 | **Initial delay** | 1 – 4000ms slider + exact field | 1ms | Wait after clicking the target, before the first keystroke |
 | **Auto type Enter** | Toggle | Off | Off: everything on one line, Enter is never pressed. On: line breaks become Enters, plus one at the end |
 | **Start with Windows** | Toggle | On | Launch 0xpaste automatically at login |

@@ -21,6 +21,13 @@
  * space yields the accent and swallows the space, after which the backspace
  * eats the accent itself and the character vanishes.
  *
+ * Speed: charDelay is the pause between keystrokes. Windows rounds any
+ * Start-Sleep up to a timer tick of roughly 15ms, so even "1ms" costs about
+ * that much - at charDelay 0 the pause is skipped altogether, which is what
+ * the panel calls turbo. Each character still goes through its own SendWait,
+ * so nothing about how the keystrokes are produced changes; there is simply
+ * no waiting in between. A slow remote console may not keep up.
+ *
  * Enter handling follows the autoEnter setting exactly:
  *   off - a newline in the text is typed as a space, so the paste stays on one
  *         line and Enter is NEVER pressed (important in chat apps, where Enter
@@ -35,8 +42,8 @@ const fs   = require('fs');
 const os   = require('os');
 
 // ---- Embedded PowerShell script ----
-// Params: -px,-py (screen coords), -textFile (UTF-8), -charDelay (ms),
-//         -initialDelay (ms, waited after focus), -autoEnter (0|1)
+// Params: -px,-py (screen coords), -textFile (UTF-8), -charDelay (ms, 0 = no
+//         pause at all), -initialDelay (ms, waited after focus), -autoEnter (0|1)
 const PS_SCRIPT = String.raw`
 param(
     [int]$px,
@@ -196,6 +203,7 @@ if ($total -eq 0) {
 # Dead-key character codes on NL / EU layouts: circumflex 94, backtick 96,
 # apostrophe 39, tilde 126, quote 34.
 $i = 0
+$lastPct = -1
 foreach ($char in $chars) {
     $i++
     $code = [int][char]$char
@@ -250,11 +258,19 @@ foreach ($char in $chars) {
         }
     }
 
+    # charDelay 0 means turbo: no pause between keystrokes. Any non-zero value
+    # is rounded up by Windows to a timer tick, roughly 15ms.
     if ($charDelay -gt 0) { Start-Sleep -Milliseconds $charDelay }
 
+    # Writing to the pipe is not free, and one write per character is
+    # measurable once the pause is gone. Only speak up when the number the
+    # panel actually shows has changed.
     $pct = [int]([Math]::Floor(($i / $total) * 100))
-    Write-Host "PROGRESS:$pct"
-    [Console]::Out.Flush()
+    if ($pct -ne $lastPct) {
+        $lastPct = $pct
+        Write-Host "PROGRESS:$pct"
+        [Console]::Out.Flush()
+    }
 }
 
 # Trailing Enter in the SAME session, while the target still has focus.

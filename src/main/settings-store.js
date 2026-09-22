@@ -16,10 +16,11 @@ const schema = {
     minimum: 0,
     maximum: 10000
   },
+  // 0 is turbo: no pause between keystrokes at all
   charDelay: {
     type: 'number',
     default: 1,
-    minimum: 1,
+    minimum: 0,
     maximum: 1000
   },
   startWithWindows: {
