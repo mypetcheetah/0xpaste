@@ -1,8 +1,13 @@
+/* This window lives outside the panel, so it gets the accent pushed to it by
+   the main process - see capture.js. Everything tinted here derives from that
+   one variable, so nothing can be left behind on the default purple. */
 :root {
   --bg-secondary:   #161619;
   --border-default: #2A2A30;
   --accent-primary: #7C3AED;
-  --accent-glow:    #8B5CF6;
+  --accent-glow:    color-mix(in srgb, var(--accent-primary) 80%, #fff);
+  --accent-a30:     color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  --accent-a20:     color-mix(in srgb, var(--accent-primary) 20%, transparent);
   --text-primary:   #E4E4E7;
   --text-secondary: #71717A;
   --font-mono:      'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Courier New', monospace;
@@ -31,7 +36,7 @@ html, body {
   transform: rotate(2deg);
   opacity: 0.9;
   box-shadow:
-    0 0 0 1px rgba(124, 58, 237, 0.3),
+    0 0 0 1px var(--accent-a30),
     0 8px 24px rgba(0, 0, 0, 0.7);
   display: none;
   z-index: 9999;
@@ -71,7 +76,7 @@ html, body {
   text-align: center;
   pointer-events: none;
   display: none;
-  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.2), 0 16px 40px rgba(0,0,0,0.7);
+  box-shadow: 0 0 0 1px var(--accent-a20), 0 16px 40px rgba(0, 0, 0, 0.7);
   z-index: 9999;
 }
 

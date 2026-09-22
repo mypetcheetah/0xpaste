@@ -8,9 +8,20 @@ const clickHint  = document.getElementById('click-hint');
 
 let mode = null; // 'drag' | 'click'
 
+// ---- Accent ----
+// This window has its own document, so it never sees the panel's accent
+// unless main hands it over. Everything else in the stylesheet is derived
+// from this one property.
+function applyAccent(hex) {
+  if (hex) document.documentElement.style.setProperty('--accent-primary', hex);
+}
+
+api.onAccent(applyAccent);
+
 // ---- Init ----
-api.onInit(({ mode: m, text }) => {
+api.onInit(({ mode: m, text, accent }) => {
   mode = m;
+  applyAccent(accent);
 
   if (mode === 'drag') {
     ghostText.textContent = text.length > 60 ? text.slice(0, 60) + '...' : text;
