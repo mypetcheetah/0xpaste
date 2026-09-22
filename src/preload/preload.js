@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // renderer decides when it is safe to close
   dockCollapse: () => ipcRenderer.send('dock:collapse'),
   dockPin: (pinned) => ipcRenderer.send('dock:pin', { pinned }),
+  dockHold: (held) => ipcRenderer.send('dock:hold', { held }),
 
   // Monitor selection
   listDisplays: () => ipcRenderer.invoke('displays:list'),

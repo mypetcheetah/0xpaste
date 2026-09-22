@@ -150,7 +150,9 @@ function buildDockWindow(display, index) {
 
   win.loadFile(path.join(__dirname, '../renderer/overlay/index.html'));
 
-  const entry = { win, displayId: String(display.id), index, pinned: false };
+  // pinned: the user clicked [pin].  held: a native dialog this dock opened
+  // is up, so the cursor being elsewhere means nothing.
+  const entry = { win, displayId: String(display.id), index, pinned: false, held: false };
 
   win.webContents.on('did-finish-load', () => {
     if (win.isDestroyed()) return;
@@ -236,6 +238,7 @@ function collapseDock(entry) {
   if (!entry || !entry.win || entry.win.isDestroyed()) return;
 
   entry.pinned = false;
+  entry.held   = false;
   entry.win.setIgnoreMouseEvents(true);
   entry.win.webContents.send('dock:set-expanded', false);
 
@@ -318,7 +321,7 @@ function tickHover() {
   const open = dockByWebContents(expandedWcId);
 
   if (open) {
-    if (!open.pinned && !hitPanel(open, p)) {
+    if (!open.pinned && !open.held && !hitPanel(open, p)) {
       open.win.webContents.send('dock:cursor-out');
     }
     return;
@@ -550,6 +553,14 @@ function setupIPC() {
   ipcMain.on('dock:pin', (e, { pinned }) => {
     const entry = dockByWebContents(e.sender.id);
     if (entry) entry.pinned = !!pinned;
+  });
+
+  // The renderer opened a native dialog of its own - the colour picker. That
+  // dialog is a separate OS window, so the cursor sitting in it reads as the
+  // cursor having left the panel. Hold the dock open until it is done with.
+  ipcMain.on('dock:hold', (e, { held }) => {
+    const entry = dockByWebContents(e.sender.id);
+    if (entry) entry.held = !!held;
   });
 
   // ---- Monitor selection ----

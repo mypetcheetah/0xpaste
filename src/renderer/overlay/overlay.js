@@ -80,6 +80,10 @@ const GEO = window.DOCK_GEO;
 
 let expanded      = false;
 let pinned        = false;
+let modalOpen     = false;  // a native dialog this panel opened is up
+let modalSawBlur  = false;  // and we have seen it actually take focus away
+let modalSince    = 0;
+let modalWatch    = null;
 let peeking       = false;
 let pointerDown   = false;
 let peekTimer     = null;
@@ -99,12 +103,12 @@ function endPeek() {
 }
 
 function requestCollapse() {
-  if (pinned || drag.active || pointerDown) return;
+  if (pinned || modalOpen || drag.active || pointerDown) return;
   if (!expanded && !peeking) return;
   if (collapseTimer) return;
   collapseTimer = setTimeout(() => {
     collapseTimer = null;
-    if (pinned || drag.active || pointerDown) return;
+    if (pinned || modalOpen || drag.active || pointerDown) return;
     endPeek();
     api.dockCollapse();
   }, GEO.COLLAPSE_DELAY);
@@ -124,6 +128,7 @@ api.onDockExpanded((on) => {
     collapseTimer = null;
   } else {
     root.classList.remove('armed');
+    holdOpen(false);
     setPinned(false);
     setSettingsView(false);
     clearSearch();
@@ -179,6 +184,70 @@ document.addEventListener('mouseleave', () => requestCollapse());
 document.addEventListener('mousedown', () => { pointerDown = true; });
 document.addEventListener('mouseup',   () => { pointerDown = false; });
 window.addEventListener('blur',        () => { pointerDown = false; });
+
+// ---- Native dialogs ----
+// Clicking the colour swatch hands focus to a Windows colour dialog, which is
+// an OS window of its own. The cursor goes with it, lands outside the panel,
+// and the watcher in main would quite reasonably close the dock underneath the
+// dialog the user is still working in. So hold the dock open for as long as
+// that dialog is up, and let go the moment it hands focus back.
+function holdOpen(on) {
+  const next = !!on;
+  if (next === modalOpen) return;
+  modalOpen = next;
+
+  if (modalOpen) {
+    modalSawBlur = false;
+    modalSince   = Date.now();
+    startModalWatch();
+  } else {
+    stopModalWatch();
+  }
+
+  api.dockHold(modalOpen);
+}
+
+// The window does not reliably get blur/focus events for a modal dialog it
+// owns - the Windows colour picker gives neither. document.hasFocus() does
+// tell the truth though: it reads false for as long as that dialog has the
+// keyboard. So watch that instead of waiting for events that may never come.
+function startModalWatch() {
+  stopModalWatch();
+  modalWatch = setInterval(() => {
+    if (!document.hasFocus()) {
+      modalSawBlur = true;
+      return;
+    }
+    // Focus is ours again, so the dialog is gone.
+    if (modalSawBlur) { holdOpen(false); return; }
+    // It never took focus at all - nothing opened. Do not hold forever.
+    if (Date.now() - modalSince > 2000) holdOpen(false);
+  }, 150);
+}
+
+function stopModalWatch() {
+  if (modalWatch) {
+    clearInterval(modalWatch);
+    modalWatch = null;
+  }
+}
+
+// Wire a control that opens a native dialog when clicked
+function watchNativeDialog(el) {
+  if (!el) return;
+  // Both, deliberately: a mouse gives mousedown first, but activating the
+  // control from the keyboard only ever fires click.
+  el.addEventListener('mousedown', () => holdOpen(true));
+  el.addEventListener('click', () => holdOpen(true));
+  // Confirming the dialog fires change. Cancelling fires nothing at all,
+  // which is what the focus watch above is for.
+  el.addEventListener('change', () => holdOpen(false));
+}
+
+// Clicking anything else in the panel means the dialog is behind us now
+document.addEventListener('mousedown', (e) => {
+  if (modalOpen && !e.target.closest('#accent-color-input')) holdOpen(false);
+});
 
 // ---- Pin ----
 function setPinned(on) {
@@ -874,6 +943,7 @@ function initSettings(settings) {
   if (colorInput) {
     colorInput.value = settings.accentColor || '#7C3AED';
     applyAccentColor(colorInput.value);
+    watchNativeDialog(colorInput);
 
     let colorTimer = null;
     colorInput.addEventListener('input', () => {
