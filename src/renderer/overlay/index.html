@@ -9,6 +9,12 @@
 </head>
 <body>
   <div id="overlay-root">
+
+    <!-- Collapsed state: the sliver that sticks out at the screen edge -->
+    <div id="dock-tab" aria-hidden="true">
+      <span class="dock-tab-grip"></span>
+    </div>
+
     <div id="overlay-panel">
 
       <!-- Liquid glass layers (visible only in glass theme) -->
@@ -28,6 +34,7 @@
           </div>
           <div class="header-actions">
             <button class="reset-btn" id="reset-defaults-btn">[reset]</button>
+            <button class="pin-btn" id="pin-btn" title="Keep the panel open">[pin]</button>
             <button id="settings-btn" class="btn-settings" title="Settings">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"/>
@@ -38,7 +45,7 @@
         </div>
         <div class="header-bottom">
           <div class="app-subtitle">// clipboard history</div>
-          <div class="header-hotkey" id="header-hotkey">toggle: ctrl + space</div>
+          <div class="header-monitor" id="header-monitor"></div>
         </div>
       </header>
 
@@ -137,6 +144,20 @@
           </div>
         </div>
 
+        <!-- ===== Monitors ===== -->
+        <div class="settings-group">
+          <div class="group-heading">// monitors</div>
+
+          <div class="settings-row settings-col">
+            <div class="settings-row-hdr">
+              <span class="settings-label">// show bar on</span>
+              <span class="settings-value" id="monitor-summary">-</span>
+            </div>
+            <div class="monitor-list" id="monitor-list"></div>
+            <div class="settings-hint" id="monitor-hint">the bar appears on every selected monitor</div>
+          </div>
+        </div>
+
         <!-- ===== Appearance ===== -->
         <div class="settings-group">
           <div class="group-heading">// appearance</div>
@@ -155,29 +176,11 @@
             <span class="settings-label">// accent color</span>
             <input type="color" id="accent-color-input" value="#7C3AED">
           </div>
-
-          <div class="settings-row">
-            <span class="settings-label">// panel position</span>
-            <div class="seg-group" id="position-group">
-              <button class="seg-btn" data-val="top-left" title="Top left">↖</button>
-              <button class="seg-btn" data-val="top-right" title="Top right">↗</button>
-              <button class="seg-btn" data-val="bottom-left" title="Bottom left">↙</button>
-              <button class="seg-btn" data-val="bottom-right" title="Bottom right">↘</button>
-            </div>
-          </div>
         </div>
 
         <!-- ===== General ===== -->
         <div class="settings-group">
           <div class="group-heading">// general</div>
-
-          <div class="settings-row">
-            <span class="settings-label">// hotkey</span>
-            <div class="hotkey-wrap">
-              <span class="hotkey-display" id="hotkey-display">ctrl + space</span>
-              <button class="hotkey-set-btn" id="hotkey-capture-btn">set</button>
-            </div>
-          </div>
 
           <div class="settings-row">
             <span class="settings-label">// start with windows</span>
@@ -220,6 +223,7 @@
     </filter>
   </svg>
 
+  <script src="../../shared/dock-geometry.js"></script>
   <script src="glass-renderer.js"></script>
   <script src="overlay.js"></script>
 </body>

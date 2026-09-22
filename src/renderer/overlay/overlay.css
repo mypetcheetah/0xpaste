@@ -31,6 +31,13 @@
   --panel-shadow:     0 0 0 1px var(--accent-a15), 0 24px 48px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.4);
   --scrollbar-thumb:  rgba(0, 0, 0, 0.55);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.75);
+  /* Dock geometry - overwritten at runtime from src/shared/dock-geometry.js.
+     The values here are only a fallback so the stylesheet stands on its own. */
+  --panel-w:    320px;
+  --panel-h:    450px;
+  --shadow-pad: 18px;
+  --tab-w:      8px;
+  --tab-h:      160px;
 }
 
 /* ---- White office theme ---- */
@@ -96,15 +103,56 @@ html, body {
   font-family: var(--font-mono);
 }
 
-/* ---- Overlay Root ---- */
+/* ---- Dock root ---- */
+/* The window is PANEL_W + SHADOW_PAD wide and PANEL_H + 2*SHADOW_PAD tall,
+   parked against the left edge of the work area. Everything outside the panel
+   is transparent and click-through, so only the sliver is ever in the way. */
 #overlay-root {
   position: fixed;
   inset: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
   background: transparent;
   pointer-events: none;
+}
+
+/* ---- Collapsed bar - the sliver that stays on screen ---- */
+#dock-tab {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: var(--tab-w);
+  height: var(--tab-h);
+  margin-top: calc(var(--tab-h) / -2);
+  border-radius: 0 5px 5px 0;
+  background: linear-gradient(180deg, var(--accent-glow), var(--accent-primary));
+  box-shadow: 0 0 8px var(--accent-a40), 2px 0 14px rgba(0, 0, 0, 0.45);
+  opacity: 0.92;
+  transform: translateX(0);
+  transition: opacity 150ms ease-out, transform 200ms ease-out, box-shadow 150ms ease-out;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.dock-tab-grip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 26px;
+  margin: -13px 0 0 -1px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+/* Cursor is in the hotzone but the panel has not landed yet */
+#overlay-root.armed #dock-tab {
+  opacity: 1;
+  box-shadow: 0 0 16px var(--accent-primary), 2px 0 18px rgba(0, 0, 0, 0.5);
+}
+
+/* Slide the bar out of the way while the panel comes in */
+#overlay-root.expanded #dock-tab {
+  opacity: 0;
+  transform: translateX(-100%);
 }
 
 /* Liquid glass layer base - hidden by default, shown only in glass theme */
@@ -156,45 +204,29 @@ html, body {
 }
 
 #overlay-panel {
-  position: relative;
-  width: 320px;
-  height: 450px;
+  position: absolute;
+  left: 0;
+  top: var(--shadow-pad);
+  width: var(--panel-w);
+  height: var(--panel-h);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  /* Flush against the screen edge: square on the left, rounded on the right */
+  border-radius: 0 12px 12px 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   pointer-events: all;
-  /* Initial off-screen state - right side (default) */
-  transform: translateX(110%);
+  /* Collapsed: parked just off the left edge of the window */
+  transform: translateX(-100%);
   opacity: 0;
-  transition: transform 250ms ease-out, opacity 200ms ease-out;
+  transition: transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 160ms ease-out;
   box-shadow: var(--panel-shadow);
 }
 
-#overlay-panel.visible {
+#overlay-root.expanded #overlay-panel {
   transform: translateX(0);
   opacity: 1;
-}
-
-#overlay-panel.hiding {
-  transform: translateX(110%);
-  opacity: 0;
-  transition: transform 200ms ease-in, opacity 150ms ease-in;
-}
-
-/* Left-side panels: slide in from the left */
-#overlay-panel.slide-left {
-  transform: translateX(-110%);
-}
-
-#overlay-panel.slide-left.visible {
-  transform: translateX(0);
-}
-
-#overlay-panel.slide-left.hiding {
-  transform: translateX(-110%);
 }
 
 /* ---- Header ---- */
@@ -294,13 +326,13 @@ html, body {
   /* window is movable:false - no drag region needed */
 }
 
-.header-hotkey {
+/* Which monitor this copy of the bar is on - hidden on single-monitor setups */
+.header-monitor {
   font-family: var(--font-mono);
   font-size: 9px;
   color: var(--text-secondary);
   opacity: 0.5;
   user-select: none;
-  /* window is movable:false - no drag region needed */
 }
 
 /* ---- Update banner ---- */
@@ -884,54 +916,66 @@ html, body {
   background: var(--accent-primary);
 }
 
-/* Hotkey capture */
-.hotkey-wrap {
+/* Monitor picker */
+.monitor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.monitor-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.hotkey-display {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--accent-glow);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
-  border-radius: 3px;
-  padding: 2px 6px;
-  min-width: 60px;
-  text-align: center;
-  transition: border-color 150ms, color 150ms;
-}
-
-.hotkey-display.capturing {
-  border-color: var(--accent-primary);
-  color: var(--text-placeholder);
-  animation: blink 700ms step-end infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
-}
-
-.hotkey-set-btn {
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
   border-radius: 3px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 10px;
+  text-align: left;
   cursor: pointer;
-  padding: 2px 7px;
-  line-height: 1.5;
+  padding: 5px 8px;
   transition: all 120ms;
 }
 
-.hotkey-set-btn:hover {
+.monitor-btn:hover {
   border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.monitor-btn.active {
+  border-color: var(--accent-primary);
+  background: var(--accent-a20);
   color: var(--accent-glow);
+}
+
+.monitor-btn .mon-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.monitor-btn .mon-check {
+  opacity: 0;
+  color: var(--accent-glow);
+}
+
+.monitor-btn.active .mon-check {
+  opacity: 1;
+}
+
+.monitor-btn .mon-meta {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.settings-hint.warn {
+  color: var(--danger);
+  opacity: 1;
 }
 
 /* Accent color picker */
@@ -1025,4 +1069,29 @@ html, body {
 
 .reset-btn.visible {
   display: block;
+}
+
+/* Pin keeps the panel open when the cursor wanders off - needed for the
+   native colour picker and for dragging the sliders without losing it. */
+.pin-btn {
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 4px;
+  opacity: 0.5;
+  transition: color 0.15s, opacity 0.15s, text-shadow 0.15s;
+}
+
+.pin-btn:hover {
+  color: var(--accent-primary);
+  opacity: 1;
+}
+
+.pin-btn.active {
+  color: var(--accent-glow);
+  opacity: 1;
+  text-shadow: 0 0 8px var(--accent-a60);
 }

@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, ipcMain, screen, nativeImage, desktopCapturer } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, desktopCapturer } = require('electron');
 
 // Remove the default application menu (File, Edit, View, Window, Help)
 Menu.setApplicationMenu(null);
@@ -10,23 +10,27 @@ Menu.setApplicationMenu(null);
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 const path = require('path');
 
-const settingsStore = require('./settings-store');
+const settingsStore    = require('./settings-store');
 const clipboardMonitor = require('./clipboard-monitor');
-const typingEngine = require('./typing-engine');
-const hotkey = require('./hotkey');
-const { createTray, destroyTray, setTypingMode, setUpdateAvailable } = require('./tray');
+const typingEngine     = require('./typing-engine');
+const escapeKey        = require('./escape-key');
+const GEO              = require('../shared/dock-geometry');
+const { createTray, destroyTray, setTypingMode, setUpdateAvailable, setBarVisible } = require('./tray');
 const { checkForUpdates, openReleasesPage } = require('./updater');
 
-// Windows
-let overlayWindow  = null;
+// ---------- Windows ----------
+// One dock per selected display: { win, displayId, index, pinned }
+let dockWindows    = [];
 let captureWindows = []; // one BrowserWindow per display - avoids multi-monitor DPI event issues
-let settingsWindow = null;
 
-// State
-let overlayVisible = false;
-let typingPending  = null; // { text, mode } for capture -> typing handoff
+// ---------- State ----------
+let barVisible     = true;  // false when the user hides the bar from the tray
+let docksParked    = false; // true while the targeting overlay / typing owns the screen
+let expandedWcId   = null;  // webContents id of the dock that is currently expanded
+let cursorGuard    = null;  // interval watching for the cursor leaving an expanded dock
+let typingPending  = null;  // { text, mode } for capture -> typing handoff
 let isQuitting     = false;
-let pendingUpdate  = null; // { version, url } when a newer release exists
+let pendingUpdate  = null;  // { version, url } when a newer release exists
 
 // ---------- Auto-start (Windows registry via Electron) ----------
 function applyAutoStart(enable) {
@@ -38,7 +42,7 @@ function applyAutoStart(enable) {
 }
 
 // ---------- Quit ----------
-// The overlay is created with closable:false, which makes the close() that
+// Dock windows are created with closable:false, which makes the close() that
 // app.quit() sends a no-op - the quit sequence never completes and the app
 // keeps running in the tray. Destroy every window explicitly so quit always
 // takes effect, and abort any in-flight typing first.
@@ -47,53 +51,74 @@ function quitApp() {
   isQuitting = true;
 
   try { typingEngine.cancel(); } catch (_) {}
+  stopCursorGuard();
 
-  if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy();
+  for (const entry of dockWindows) {
+    if (entry.win && !entry.win.isDestroyed()) entry.win.destroy();
+  }
   for (const win of captureWindows) {
     if (win && !win.isDestroyed()) win.destroy();
   }
-  if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.destroy();
 
   app.quit();
 }
 
-// ---------- Overlay window ----------
-function getOverlayBounds(position) {
-  const display = screen.getPrimaryDisplay();
-  const { workArea } = display;
-  const W = 320;
-  const H = 450;
-  const MARGIN = 16;
+// ============================================================
+// Display selection
+// ============================================================
+// Displays are stored by id. Ids are not stable across reboots or cable
+// swaps, so a stored id that no longer exists is simply ignored, and an
+// empty result always falls back to the primary display - the bar can
+// never end up on no monitor at all.
 
-  const pos = position || settingsStore.getSettings().panelPosition || 'bottom-right';
-
-  let x, y;
-  switch (pos) {
-    case 'bottom-left':
-      x = workArea.x + MARGIN;
-      y = workArea.y + workArea.height - H - MARGIN;
-      break;
-    case 'top-right':
-      x = workArea.x + workArea.width - W - MARGIN;
-      y = workArea.y + MARGIN;
-      break;
-    case 'top-left':
-      x = workArea.x + MARGIN;
-      y = workArea.y + MARGIN;
-      break;
-    default: // bottom-right
-      x = workArea.x + workArea.width - W - MARGIN;
-      y = workArea.y + workArea.height - H - MARGIN;
-  }
-
-  return { width: W, height: H, x, y };
+function displaysInOrder() {
+  return screen.getAllDisplays()
+    .slice()
+    .sort((a, b) => (a.bounds.x - b.bounds.x) || (a.bounds.y - b.bounds.y));
 }
 
-function createOverlayWindow() {
-  const bounds = getOverlayBounds();
+function selectedDisplays() {
+  const stored = (settingsStore.getSettings().dockDisplays || []).map(String);
+  if (!stored.length) return [screen.getPrimaryDisplay()];
 
-  overlayWindow = new BrowserWindow({
-    ...bounds,
+  const picked = displaysInOrder().filter(d => stored.includes(String(d.id)));
+  return picked.length ? picked : [screen.getPrimaryDisplay()];
+}
+
+function describeDisplays() {
+  const order     = displaysInOrder();
+  const primaryId = screen.getPrimaryDisplay().id;
+  const active    = new Set(selectedDisplays().map(d => String(d.id)));
+
+  return order.map((d, i) => ({
+    id:       String(d.id),
+    index:    i + 1,
+    width:    d.bounds.width,
+    height:   d.bounds.height,
+    primary:  d.id === primaryId,
+    selected: active.has(String(d.id))
+  }));
+}
+
+// ============================================================
+// Dock windows
+// ============================================================
+function dockBoundsFor(display) {
+  const wa     = display.workArea;
+  const width  = GEO.PANEL_W + GEO.SHADOW;
+  const height = GEO.PANEL_H + (GEO.SHADOW * 2);
+
+  return {
+    x: wa.x,
+    y: Math.round(Math.max(wa.y, wa.y + (wa.height - height) / 2)),
+    width,
+    height
+  };
+}
+
+function buildDockWindow(display, index) {
+  const win = new BrowserWindow({
+    ...dockBoundsFor(display),
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -113,13 +138,189 @@ function createOverlayWindow() {
     }
   });
 
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-  overlayWindow.loadFile(path.join(__dirname, '../renderer/overlay/index.html'));
+  win.setAlwaysOnTop(true, 'screen-saver', 1);
 
-  overlayWindow.webContents.on('did-finish-load', () => {
-    const history = clipboardMonitor.getHistory();
-    overlayWindow.webContents.send('clipboard:initial-history', history);
+  // Collapsed docks are click-through. forward:true still delivers mouse move
+  // messages to the renderer, which is what lets it notice the cursor entering
+  // the bar while everything underneath stays clickable.
+  win.setIgnoreMouseEvents(true, { forward: true });
+
+  win.loadFile(path.join(__dirname, '../renderer/overlay/index.html'));
+
+  const entry = { win, displayId: String(display.id), index, pinned: false };
+
+  win.webContents.on('did-finish-load', () => {
+    if (win.isDestroyed()) return;
+    win.webContents.send('clipboard:initial-history', clipboardMonitor.getHistory());
+    win.webContents.send('dock:info', { index: entry.index, total: dockWindows.length });
+    if (pendingUpdate) win.webContents.send('update:available', pendingUpdate);
   });
+
+  win.once('ready-to-show', () => {
+    if (!win.isDestroyed() && barVisible && !docksParked) win.showInactive();
+  });
+
+  return entry;
+}
+
+// Create/destroy only what actually changed, so the dock the user is currently
+// working in survives a monitor being added, removed or toggled elsewhere.
+function syncDockWindows() {
+  const wanted    = selectedDisplays();
+  const wantedIds = new Set(wanted.map(d => String(d.id)));
+
+  for (const entry of dockWindows) {
+    if (!wantedIds.has(entry.displayId) && entry.win && !entry.win.isDestroyed()) {
+      if (entry.win.webContents.id === expandedWcId) {
+        expandedWcId = null;
+        stopCursorGuard();
+      }
+      entry.win.destroy();
+    }
+  }
+  dockWindows = dockWindows.filter(e => wantedIds.has(e.displayId) && e.win && !e.win.isDestroyed());
+
+  wanted.forEach((display, i) => {
+    const existing = dockWindows.find(e => e.displayId === String(display.id));
+    if (existing) {
+      existing.index = i + 1;
+      existing.win.setBounds(dockBoundsFor(display));
+    } else {
+      dockWindows.push(buildDockWindow(display, i + 1));
+    }
+  });
+
+  // Keep the order stable so index numbering matches the physical layout
+  dockWindows.sort((a, b) => a.index - b.index);
+
+  dockBroadcast('displays:changed');
+  for (const entry of dockWindows) {
+    if (entry.win && !entry.win.isDestroyed()) {
+      entry.win.webContents.send('dock:info', { index: entry.index, total: dockWindows.length });
+    }
+  }
+}
+
+function dockBroadcast(channel, payload) {
+  for (const entry of dockWindows) {
+    if (entry.win && !entry.win.isDestroyed()) entry.win.webContents.send(channel, payload);
+  }
+}
+
+function dockByWebContents(id) {
+  return dockWindows.find(e => e.win && !e.win.isDestroyed() && e.win.webContents.id === id) || null;
+}
+
+// ---------- Expand / collapse ----------
+function expandDock(entry) {
+  if (!entry || !barVisible || docksParked) return;
+  if (entry.win.isDestroyed()) return;
+
+  // Only one dock is open at a time
+  for (const other of dockWindows) {
+    if (other !== entry) collapseDock(other);
+  }
+
+  entry.win.setIgnoreMouseEvents(false);
+  entry.win.webContents.send('dock:set-expanded', true);
+  expandedWcId = entry.win.webContents.id;
+  startCursorGuard();
+}
+
+function collapseDock(entry) {
+  if (!entry || !entry.win || entry.win.isDestroyed()) return;
+
+  entry.pinned = false;
+  entry.win.setIgnoreMouseEvents(true, { forward: true });
+  entry.win.webContents.send('dock:set-expanded', false);
+
+  if (expandedWcId === entry.win.webContents.id) {
+    expandedWcId = null;
+    stopCursorGuard();
+  }
+}
+
+function collapseAllDocks() {
+  for (const entry of dockWindows) collapseDock(entry);
+}
+
+// Safety net: Chromium does not reliably deliver a final mouseleave when a
+// window flips between click-through and interactive, so the main process
+// watches the real cursor. It only reports the fact - the renderer decides,
+// because it is the side that knows about pinning and in-flight drags.
+function startCursorGuard() {
+  stopCursorGuard();
+  cursorGuard = setInterval(() => {
+    const entry = dockByWebContents(expandedWcId);
+    if (!entry) { stopCursorGuard(); return; }
+    if (entry.pinned) return;
+
+    const b = entry.win.getBounds();
+    const p = screen.getCursorScreenPoint();
+    const out = p.x < b.x - 4 || p.x > b.x + b.width + 4 ||
+                p.y < b.y - 4 || p.y > b.y + b.height + 4;
+
+    if (out) entry.win.webContents.send('dock:cursor-out');
+  }, 150);
+}
+
+function stopCursorGuard() {
+  if (cursorGuard) {
+    clearInterval(cursorGuard);
+    cursorGuard = null;
+  }
+}
+
+// ---------- Park / restore (typing flow and tray toggle) ----------
+// Win32 only releases mouse capture when the window is actually hidden, so the
+// drag-to-target flow needs a real hide() rather than just a visual collapse.
+function parkDocks() {
+  docksParked = true;
+  collapseAllDocks();
+  for (const entry of dockWindows) {
+    if (entry.win && !entry.win.isDestroyed()) entry.win.hide();
+  }
+}
+
+function restoreDocks() {
+  docksParked = false;
+  if (!barVisible) return;
+  for (const entry of dockWindows) {
+    if (entry.win && !entry.win.isDestroyed()) {
+      entry.win.setIgnoreMouseEvents(true, { forward: true });
+      entry.win.webContents.send('dock:set-expanded', false);
+      entry.win.showInactive();
+    }
+  }
+}
+
+function hideBar() {
+  collapseAllDocks();
+  for (const entry of dockWindows) {
+    if (entry.win && !entry.win.isDestroyed()) entry.win.hide();
+  }
+}
+
+function toggleBar() {
+  barVisible = !barVisible;
+  setBarVisible(barVisible);
+  if (barVisible) {
+    restoreDocks();
+    dockBroadcast('dock:peek');
+  } else {
+    hideBar();
+  }
+}
+
+function showBar() {
+  if (!barVisible) {
+    toggleBar();
+    return;
+  }
+  if (!docksParked) {
+    restoreDocks();
+    dockBroadcast('dock:peek');
+  }
 }
 
 // ---------- Capture windows (one per display) ----------
@@ -171,64 +372,9 @@ function recreateCaptureWindows() {
   createCaptureWindows();
 }
 
-// ---------- Settings window ----------
-function openSettingsWindow() {
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.focus();
-    return;
-  }
-
-  settingsWindow = new BrowserWindow({
-    width: 480,
-    height: 520,
-    resizable: false,
-    maximizable: false,
-    autoHideMenuBar: true,
-    title: '0xpaste - Settings',
-    show: false,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      preload: path.join(__dirname, '../preload/settings-preload.js')
-    }
-  });
-
-  const iconPath = path.join(__dirname, '../assets/icon.png');
-  settingsWindow.setIcon(nativeImage.createFromPath(iconPath));
-  settingsWindow.loadFile(path.join(__dirname, '../renderer/settings/index.html'));
-  settingsWindow.once('ready-to-show', () => settingsWindow.show());
-  settingsWindow.on('closed', () => { settingsWindow = null; });
-}
-
-// ---------- Overlay toggle ----------
-function showOverlay(inactive = false) {
-  if (!overlayWindow || overlayWindow.isDestroyed()) return;
-  // Always recompute position from primary display so multi-monitor setups
-  // never place the panel on a secondary screen.
-  overlayWindow.setBounds(getOverlayBounds());
-  overlayVisible = true;
-  if (inactive) {
-    // Show without stealing focus - keeps RDP/VM session active so the user
-    // can still press Enter (or any key) in the remote window after a paste.
-    overlayWindow.showInactive();
-  } else {
-    overlayWindow.show();
-    overlayWindow.focus();
-  }
-  overlayWindow.webContents.send('overlay:show');
-}
-
-function hideOverlay() {
-  if (!overlayWindow || overlayWindow.isDestroyed()) return;
-  overlayWindow.webContents.send('overlay:hide');
-}
-
-function toggleOverlay() {
-  if (overlayVisible) {
-    hideOverlay();
-  } else {
-    showOverlay();
-  }
+function onDisplayLayoutChanged() {
+  recreateCaptureWindows();
+  syncDockWindows();
 }
 
 // ---------- Capture flow ----------
@@ -242,11 +388,11 @@ function showCaptureWindows(mode, text) {
   const primary = captureWindows[0];
   if (primary && !primary.isDestroyed()) primary.focus();
 
-  hotkey.registerEscape(() => cancelCapture());
+  escapeKey.registerEscape(() => cancelCapture());
 }
 
 function hideCaptureWindows() {
-  hotkey.unregisterEscape();
+  escapeKey.unregisterEscape();
   for (const win of captureWindows) {
     if (win && !win.isDestroyed()) win.hide();
   }
@@ -255,7 +401,7 @@ function hideCaptureWindows() {
 function cancelCapture() {
   hideCaptureWindows();
   typingPending = null;
-  showOverlay();
+  restoreDocks();
 }
 
 async function executeTyping(x, y) {
@@ -279,11 +425,7 @@ async function executeTyping(x, y) {
     if (dist > CANCEL_DIST) typingEngine.cancel();
   }, 80);
 
-  const progressCallback = (percent) => {
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.webContents.send('typing:progress', percent);
-    }
-  };
+  const progressCallback = (percent) => dockBroadcast('typing:progress', percent);
 
   const phys = screen.dipToScreenPoint({ x, y });
 
@@ -296,14 +438,11 @@ async function executeTyping(x, y) {
     clearInterval(mousePoll);
     wasCancelled = wasCancelled || typingEngine.wasCancelled();
     setTypingMode(false);
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.webContents.send('typing:done', { cancelled: wasCancelled });
-    }
-    // Bring the overlay back so the user can paste the next item without
-    // pressing the hotkey again. Use inactive=true so the RDP/VM window keeps
-    // keyboard focus - the user can press Enter (or any key) in the remote
-    // session immediately after a paste without clicking back into it.
-    showOverlay(true);
+    dockBroadcast('typing:done', { cancelled: wasCancelled });
+    // Put the bar back, collapsed. The cursor is sitting in the target window,
+    // so expanding here would only be in the way - one flick to the left edge
+    // reopens it for the next paste.
+    restoreDocks();
   }
 }
 
@@ -313,72 +452,74 @@ function setupIPC() {
     return clipboardMonitor.getHistory();
   });
 
-  ipcMain.on('clipboard:delete-item', (_, { id }) => {
+  ipcMain.on('clipboard:delete-item', (e, { id }) => {
     clipboardMonitor.deleteItem(id);
+    dockBroadcastExcept(e.sender.id, 'clipboard:refresh', clipboardMonitor.getHistory());
   });
 
-  ipcMain.on('clipboard:clear-all', () => {
+  ipcMain.on('clipboard:clear-all', (e) => {
     clipboardMonitor.clearAll();
+    dockBroadcastExcept(e.sender.id, 'clipboard:refresh', clipboardMonitor.getHistory());
   });
 
   ipcMain.on('clipboard:toggle-pin', (_, { id }) => {
     const item = clipboardMonitor.togglePin(id);
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.webContents.send('clipboard:pin-updated', {
-        id,
-        pinned: item ? item.pinned : false
-      });
-    }
+    dockBroadcast('clipboard:pin-updated', { id, pinned: item ? item.pinned : false });
+  });
+
+  // ---- Dock hover lifecycle ----
+  ipcMain.on('dock:expand', (e) => {
+    expandDock(dockByWebContents(e.sender.id));
+  });
+
+  ipcMain.on('dock:collapse', (e) => {
+    collapseDock(dockByWebContents(e.sender.id));
+  });
+
+  ipcMain.on('dock:pin', (e, { pinned }) => {
+    const entry = dockByWebContents(e.sender.id);
+    if (entry) entry.pinned = !!pinned;
+  });
+
+  // ---- Monitor selection ----
+  ipcMain.handle('displays:list', () => describeDisplays());
+
+  ipcMain.on('displays:set', (_, { ids }) => {
+    const clean = Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
+    if (!clean.length) return; // the bar must live on at least one monitor
+    settingsStore.updateSetting('dockDisplays', clean);
+    syncDockWindows();
   });
 
   ipcMain.on('typing:start-drag', (_, { text }) => {
     typingPending = { text, mode: 'drag' };
-    // Hide overlay FIRST - Win32 releases mouse capture when window is hidden.
+    // Park FIRST - Win32 releases mouse capture when the window is hidden.
     // This allows the capture windows to receive subsequent mouse events.
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.hide();
-      overlayVisible = false;
-    }
+    parkDocks();
     showCaptureWindows('drag', text);
   });
 
   ipcMain.on('typing:start-click', (_, { text }) => {
     typingPending = { text, mode: 'click' };
-    // Animate out first, then hard-hide
-    hideOverlay();
+    // Animate the panel out first, then hard-hide
+    collapseAllDocks();
     setTimeout(() => {
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.hide();
-        overlayVisible = false;
-      }
+      parkDocks();
       showCaptureWindows('click', text);
     }, 220);
   });
 
-  ipcMain.on('capture:drop-target', (_) => {
+  ipcMain.on('capture:drop-target', () => {
     // Use getCursorScreenPoint() from the main process - guaranteed logical pixels.
     // Renderer's event.screenX/Y can be physical pixels depending on DPI mode,
     // causing double-scaling errors that grow larger toward the bottom of the screen.
     const point = screen.getCursorScreenPoint();
     hideCaptureWindows();
-    if (overlayVisible) {
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.hide();
-        overlayVisible = false;
-      }
-    }
     executeTyping(point.x, point.y);
   });
 
   ipcMain.on('capture:cancel', () => {
     cancelCapture();
-  });
-
-  ipcMain.on('overlay:hide-done', () => {
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.hide();
-      overlayVisible = false;
-    }
   });
 
   ipcMain.on('typing:cancel', () => {
@@ -389,7 +530,7 @@ function setupIPC() {
     return settingsStore.getSettings();
   });
 
-  ipcMain.on('settings:update', (_, { key, value }) => {
+  ipcMain.on('settings:update', (e, { key, value }) => {
     settingsStore.updateSetting(key, value);
 
     switch (key) {
@@ -397,20 +538,12 @@ function setupIPC() {
         applyAutoStart(value);
         break;
 
-      case 'hotkey':
-        hotkey.updateHotkey(value);
-        break;
-
       case 'accentColor':
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          overlayWindow.webContents.send('settings:accent-color', value);
-        }
+        dockBroadcastExcept(e.sender.id, 'settings:accent-color', value);
         break;
 
-      case 'panelPosition':
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          overlayWindow.setBounds(getOverlayBounds(value));
-        }
+      case 'theme':
+        dockBroadcastExcept(e.sender.id, 'settings:theme', value);
         break;
 
       case 'maxHistory':
@@ -419,32 +552,21 @@ function setupIPC() {
     }
   });
 
-  // Hotkey capture: temporarily disable global hotkey so it doesn't interfere
-  ipcMain.on('hotkey:capture', (_, { active }) => {
-    if (active) {
-      hotkey.unregisterHotkey();
-    } else {
-      // Re-register from stored settings (called on cancel)
-      const settings = settingsStore.getSettings();
-      hotkey.updateHotkey(settings.hotkey);
-    }
-  });
-
-  ipcMain.on('open:settings', () => {
-    openSettingsWindow();
-  });
-
-  // Update notification: overlay asks on load, and opens the release page.
+  // Update notification: the dock asks on load, and opens the release page.
   ipcMain.handle('update:get', () => pendingUpdate);
   ipcMain.on('update:open', () => openReleasesPage(pendingUpdate && pendingUpdate.url));
 
-  // Screen capture for WebGL glass lens - crops the primary display screenshot
-  // to exactly the overlay panel area and returns it as a data URL.
-  ipcMain.handle('screen:capture-overlay', async () => {
+  // Screen capture for the WebGL glass lens - crops the screenshot of the
+  // display this dock lives on down to exactly the panel area.
+  ipcMain.handle('screen:capture-overlay', async (e) => {
     try {
-      const bounds  = getOverlayBounds();
-      const display = screen.getPrimaryDisplay();
-      const sf      = display.scaleFactor;
+      const entry = dockByWebContents(e.sender.id);
+      if (!entry) return null;
+
+      const display = screen.getAllDisplays().find(d => String(d.id) === entry.displayId)
+                   || screen.getPrimaryDisplay();
+      const sf = display.scaleFactor;
+      const b  = entry.win.getBounds();
 
       const sources = await desktopCapturer.getSources({
         types: ['screen'],
@@ -455,20 +577,30 @@ function setupIPC() {
       });
 
       if (!sources.length) return null;
+      const source = sources.find(s => String(s.display_id) === entry.displayId) || sources[0];
 
-      const cropped = sources[0].thumbnail.crop({
-        x:      Math.round(bounds.x      * sf),
-        y:      Math.round(bounds.y      * sf),
-        width:  Math.round(bounds.width  * sf),
-        height: Math.round(bounds.height * sf)
+      // Window rect -> display-relative -> the panel area inside that window
+      const cropped = source.thumbnail.crop({
+        x:      Math.round((b.x - display.bounds.x) * sf),
+        y:      Math.round((b.y - display.bounds.y + GEO.SHADOW) * sf),
+        width:  Math.round(GEO.PANEL_W * sf),
+        height: Math.round(GEO.PANEL_H * sf)
       });
 
       return cropped.toDataURL();
-    } catch (e) {
-      console.error('[glass] screen capture failed:', e.message);
+    } catch (err) {
+      console.error('[glass] screen capture failed:', err.message);
       return null;
     }
   });
+}
+
+function dockBroadcastExcept(wcId, channel, payload) {
+  for (const entry of dockWindows) {
+    if (entry.win && !entry.win.isDestroyed() && entry.win.webContents.id !== wcId) {
+      entry.win.webContents.send(channel, payload);
+    }
+  }
 }
 
 // ---------- App lifecycle ----------
@@ -478,7 +610,7 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    toggleOverlay();
+    showBar();
   });
 
   app.whenReady().then(() => {
@@ -488,47 +620,33 @@ if (!gotLock) {
     applyAutoStart(settings.startWithWindows);
     clipboardMonitor.setMaxHistory(settings.maxHistory);
 
-    createOverlayWindow();
+    syncDockWindows();
     createCaptureWindows();
 
-    // Recreate capture windows whenever the display configuration changes
-    screen.on('display-added',          recreateCaptureWindows);
-    screen.on('display-removed',        recreateCaptureWindows);
-    screen.on('display-metrics-changed', recreateCaptureWindows);
+    // Rebuild both sets whenever the display configuration changes
+    screen.on('display-added',           onDisplayLayoutChanged);
+    screen.on('display-removed',         onDisplayLayoutChanged);
+    screen.on('display-metrics-changed', onDisplayLayoutChanged);
 
-    // Show overlay on startup - delay lets the installer close and release
-    // the foreground lock so Windows allows us to steal focus.
-    overlayWindow.once('ready-to-show', () => {
-      setTimeout(() => {
-        app.focus();
-        showOverlay();
-      }, 600);
+    // Peek the panel open briefly on launch so the bar is easy to find.
+    setTimeout(() => dockBroadcast('dock:peek'), 900);
+
+    createTray({
+      onToggleBar:  toggleBar,
+      onQuit:       quitApp,
+      onCancelType: () => { typingEngine.cancel(); }
     });
-
-    createTray(
-      toggleOverlay,
-      openSettingsWindow,
-      quitApp,
-      () => { typingEngine.cancel(); }
-    );
-
-    // Register hotkey with persisted binding
-    hotkey.registerHotkey(toggleOverlay, settings.hotkey);
 
     // Check for updates in the background - silent on any error. Only fires the
     // callback when a strictly newer release actually exists.
     checkForUpdates((version, url) => {
       pendingUpdate = { version, url: url || null };
       setUpdateAvailable(version, () => openReleasesPage(pendingUpdate.url));
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.webContents.send('update:available', pendingUpdate);
-      }
+      dockBroadcast('update:available', pendingUpdate);
     });
 
     clipboardMonitor.start((item) => {
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.webContents.send('clipboard:new-item', item);
-      }
+      dockBroadcast('clipboard:new-item', item);
     });
 
     setupIPC();
@@ -539,8 +657,9 @@ if (!gotLock) {
   });
 
   app.on('will-quit', () => {
-    hotkey.unregisterAll();
+    escapeKey.unregisterAll();
     clipboardMonitor.stop();
+    stopCursorGuard();
     destroyTray();
   });
 }

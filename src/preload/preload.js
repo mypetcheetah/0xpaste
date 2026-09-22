@@ -14,13 +14,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startClick: (text) => ipcRenderer.send('typing:start-click', { text }),
   cancelTyping: () => ipcRenderer.send('typing:cancel'),
 
-  // Overlay lifecycle
-  hideOverlayDone: () => ipcRenderer.send('overlay:hide-done'),
+  // Dock lifecycle - the renderer owns the hover policy, main owns the window
+  dockExpand: () => ipcRenderer.send('dock:expand'),
+  dockCollapse: () => ipcRenderer.send('dock:collapse'),
+  dockPin: (pinned) => ipcRenderer.send('dock:pin', { pinned }),
+
+  // Monitor selection
+  listDisplays: () => ipcRenderer.invoke('displays:list'),
+  setDisplays: (ids) => ipcRenderer.send('displays:set', { ids }),
 
   // Settings
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSetting: (key, value) => ipcRenderer.send('settings:update', { key, value }),
-  hotkeyCapture: (active) => ipcRenderer.send('hotkey:capture', { active }),
 
   // Updates
   getUpdate: () => ipcRenderer.invoke('update:get'),
@@ -29,15 +34,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Listeners
   onNewItem: (cb) => ipcRenderer.on('clipboard:new-item', (_, item) => cb(item)),
   onInitialHistory: (cb) => ipcRenderer.on('clipboard:initial-history', (_, history) => cb(history)),
+  onRefreshHistory: (cb) => ipcRenderer.on('clipboard:refresh', (_, history) => cb(history)),
   onPinUpdated: (cb) => ipcRenderer.on('clipboard:pin-updated', (_, data) => cb(data)),
-  onOverlayShow: (cb) => ipcRenderer.on('overlay:show', () => cb()),
-  onOverlayHide: (cb) => ipcRenderer.on('overlay:hide', () => cb()),
+  onDockExpanded: (cb) => ipcRenderer.on('dock:set-expanded', (_, expanded) => cb(expanded)),
+  onDockCursorOut: (cb) => ipcRenderer.on('dock:cursor-out', () => cb()),
+  onDockPeek: (cb) => ipcRenderer.on('dock:peek', () => cb()),
+  onDockInfo: (cb) => ipcRenderer.on('dock:info', (_, info) => cb(info)),
+  onDisplaysChanged: (cb) => ipcRenderer.on('displays:changed', () => cb()),
   onTypingProgress: (cb) => ipcRenderer.on('typing:progress', (_, percent) => cb(percent)),
   onTypingDone: (cb) => ipcRenderer.on('typing:done', (_, data) => cb(data)),
   onAccentColor: (cb) => ipcRenderer.on('settings:accent-color', (_, color) => cb(color)),
+  onTheme: (cb) => ipcRenderer.on('settings:theme', (_, theme) => cb(theme)),
   onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_, data) => cb(data)),
 
-  // Glass theme: capture screenshot of the area behind the overlay panel
+  // Glass theme: capture screenshot of the area behind the panel
   captureBackground: () => ipcRenderer.invoke('screen:capture-overlay'),
 
   // Remove listeners (cleanup)

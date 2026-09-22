@@ -1,7 +1,7 @@
 {
   "name": "0xpaste",
-  "version": "1.1.0",
-  "description": "Clipboard history manager for Windows - click or drag to type anywhere, even where Ctrl+V doesn't work.",
+  "version": "1.2.0",
+  "description": "Clipboard history manager for Windows - a hover-to-open bar at your screen edge that types anywhere, even where Ctrl+V does not work.",
   "main": "src/main/main.js",
   "author": "mypetcheetah",
   "license": "MIT",
@@ -20,9 +20,10 @@
     "windows",
     "productivity",
     "paste",
-    "sendinput",
     "rdp",
-    "tray"
+    "tray",
+    "dock",
+    "multi-monitor"
   ],
   "scripts": {
     "start": "electron .",
@@ -59,7 +60,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "src/assets/icon.ico",
@@ -76,7 +79,9 @@
       "createStartMenuShortcut": true,
       "shortcutName": "0xpaste",
       "include": "build/installer.nsh",
-      "installerLanguages": ["en_US"],
+      "installerLanguages": [
+        "en_US"
+      ],
       "language": "1033",
       "runAfterFinish": true
     }
