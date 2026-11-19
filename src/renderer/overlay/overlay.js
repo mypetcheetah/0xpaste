@@ -6,6 +6,10 @@
 
 const api = window.electronAPI;
 
+// What the speed slider positions mean. It lives in shared/ so the arithmetic
+// can be checked without a window around it.
+const SPEED = window.TYPING_SPEED;
+
 // ---- State ----
 let history = [];
 let maxHistory = 50;
@@ -347,6 +351,17 @@ api.onTypingDone(({ cancelled } = {}) => {
   selectedItemId = null;
   renderList();
 });
+
+// ============================================================
+// Typing speed - the number next to the slider
+// ============================================================
+// Just the slider and what one character costs at that position. No hint
+// text and no readouts: the number is the whole story.
+function refreshSpeedLabel() {
+  const slider = document.getElementById('speed-slider');
+  const value  = document.getElementById('speed-value');
+  if (slider && value) value.textContent = SPEED.label(slider.value);
+}
 
 // ============================================================
 // Accent color push from main (when changed while overlay visible)
@@ -819,6 +834,7 @@ api.onDisplaysChanged(() => renderMonitors());
 // ============================================================
 const DEFAULTS = {
   charDelay:      1,
+  fastCharMs:     -1,   // the fast speed range is something you choose, never a default
   initialDelay:   1,
   autoEnter:      false,
   breakTyping:    'mouse',
@@ -828,14 +844,8 @@ const DEFAULTS = {
   theme:          'default'
 };
 
-const CHAR_DELAY_MIN = 0;  // 0 is turbo: no pause between keystrokes
-const CHAR_DELAY_MAX = 150;
 const INIT_DELAY_MIN = 1;
 const INIT_DELAY_MAX = 4000;
-
-function speedLabel(ms) {
-  return ms === 0 ? 'turbo' : ms + 'ms/char';
-}
 
 function clampInt(val, min, max, fallback) {
   const n = parseInt(val, 10);
@@ -855,11 +865,10 @@ resetBtn.addEventListener('click', () => {
   // Persist all defaults
   Object.entries(DEFAULTS).forEach(([key, val]) => api.updateSetting(key, val));
 
-  // Typing speed (charDelay)
+  // Typing speed: back to the classic default position
   const speedSlider = document.getElementById('speed-slider');
-  const speedValue  = document.getElementById('speed-value');
-  if (speedSlider) speedSlider.value = DEFAULTS.charDelay;
-  if (speedValue)  speedValue.textContent = speedLabel(DEFAULTS.charDelay);
+  if (speedSlider) speedSlider.value = SPEED.indexFromSettings(DEFAULTS);
+  refreshSpeedLabel();
 
   // Initial delay (slider + number)
   const delaySlider = document.getElementById('delay-slider');
@@ -912,20 +921,25 @@ function initSegGroup(groupId, currentVal, onChange) {
 // Settings - initialise all controls from stored settings
 // ============================================================
 function initSettings(settings) {
-  // Typing speed = charDelay in ms (left = fast/low delay, right = slow/high delay)
+  // Typing speed. The slider walks through the positions that are really
+  // different (fastest on the left); shared/typing-speed.js knows what each
+  // one means and which settings it stands for.
   const speedSlider = document.getElementById('speed-slider');
-  const speedValue  = document.getElementById('speed-value');
   if (speedSlider) {
-    const cd = clampInt(settings.charDelay, CHAR_DELAY_MIN, CHAR_DELAY_MAX, DEFAULTS.charDelay);
-    speedSlider.value = cd;
-    speedValue.textContent = speedLabel(cd);
+    speedSlider.min   = 0;
+    speedSlider.max   = SPEED.STOPS.length - 1;
+    speedSlider.step  = 1;
+    speedSlider.value = SPEED.indexFromSettings(settings);
+    refreshSpeedLabel();
 
     let speedTimer = null;
     speedSlider.addEventListener('input', () => {
-      const val = clampInt(speedSlider.value, CHAR_DELAY_MIN, CHAR_DELAY_MAX, DEFAULTS.charDelay);
-      speedValue.textContent = speedLabel(val);
+      refreshSpeedLabel();
+      const next = SPEED.settingsFromIndex(speedSlider.value);
       clearTimeout(speedTimer);
-      speedTimer = setTimeout(() => api.updateSetting('charDelay', val), 250);
+      speedTimer = setTimeout(() => {
+        Object.entries(next).forEach(([key, val]) => api.updateSetting(key, val));
+      }, 250);
     });
   }
 

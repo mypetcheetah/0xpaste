@@ -1052,6 +1052,10 @@ html, body {
   color: var(--accent-glow);
   font-family: var(--font-mono);
   display: none;
+  /* One line, always: "[typing... 100%]" used to be squeezed until it broke
+     in two between the other footer texts. */
+  white-space: nowrap;
+  margin: 0 8px;
 }
 
 .typing-indicator.visible {

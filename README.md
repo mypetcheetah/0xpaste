@@ -11,7 +11,7 @@ Copy anything. Find it later. Type it anywhere, even where Ctrl+V doesn't work.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-26-47848F?style=flat-square&logo=electron&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.2.0-7C3AED?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.3.0-7C3AED?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-22C55E?style=flat-square)
 ![Built with JS](https://img.shields.io/badge/built%20with-vanilla%20JS-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
 
@@ -47,7 +47,7 @@ This means it works in places where normal Ctrl+V is blocked: **remote desktop s
 | 🔒 **Password masking** | Items that look like passwords are auto-detected and masked by default - shows first 4 chars + blurred dots. Eye icon reveals full text. |
 | 🚫 **Typing killswitch** | Stop a paste half way with either the mouse or `Esc`, whichever suits you. Mouse movement is the default because it is the only one that survives an RDP session, which swallows key presses before they reach the app. |
 | ↵ **Auto-type Enter** | Off: the paste stays on one line and Enter is never pressed - safe in chat apps. On: line breaks become real Enters, plus one after the last character. |
-| ⚡ **Adjustable speed** | Sliders for keystroke delay and initial delay (1-4000ms). Drag the speed slider all the way down for **turbo**, which drops the pause between keystrokes entirely - roughly ten times faster than the old fastest setting, because Windows rounds any non-zero pause up to a timer tick of about 15ms. |
+| ⚡ **Fast typing** | The speed slider goes down to about 5ms per character - roughly eight times as fast as the old turbo - and the number next to it is the real time one character takes. |
 | ⬆ **Update notification** | Checks GitHub on start and shows an in-app banner plus a tray entry, but only when a newer stable release actually exists. |
 | ⚙️ **Full settings panel** | All settings accessible from inside the overlay - no separate window needed. |
 | 🎨 **Live accent color** | Pick any color - the entire UI including glows, toggles, and borders update instantly. |
@@ -124,7 +124,7 @@ Open settings by clicking the gear icon inside the panel. Settings changes apply
 
 | Setting | Options | Default | What it does |
 |---------|---------|---------|--------------|
-| **Typing speed** | turbo, or 1 – 150ms | 1ms | Pause between keystrokes. `turbo` (slider fully left) removes the pause altogether: much faster, but a slow remote console may not keep up. Anything above 0 is rounded up by Windows to roughly 15ms. |
+| **Typing speed** | 33 positions, 5 to 197 ms per character | 57ms/char | Fastest on the left. The number is the real time one character takes. Everything from 41ms/char (the old turbo) to the right types exactly as it always did. The faster positions ask Windows for a 1ms timer in the typing process, which is what makes them possible - see [Typing speed](#typing-speed). |
 | **Initial delay** | 1 – 4000ms slider + exact field | 1ms | Wait after clicking the target, before the first keystroke |
 | **Break typing with** | mouse / esc | mouse | How to stop a paste half way. `mouse`: any movement cancels - the only one that works in RDP. `esc`: leaves the mouse free, but a remote session may swallow the key |
 | **Auto type Enter** | Toggle | Off | Off: everything on one line, Enter is never pressed. On: line breaks become Enters, plus one at the end |
@@ -185,7 +185,7 @@ npm start
 npm run dist
 ```
 
-The installer outputs to `dist/0xpaste Setup 1.1.0.exe`.
+The installer outputs to `dist/0xpaste Setup 1.3.0.exe`.
 
 > **Run `npm start` from PowerShell or cmd.exe, not Git Bash.**
 > In Git Bash/MSYS2, `require('electron')` resolves the npm package path instead of the binary.
@@ -206,7 +206,8 @@ The installer outputs to `dist/0xpaste Setup 1.1.0.exe`.
 │   │   └── tray.js               # System tray icon + context menu
 │   ├── passwordDetector.js       # Password scoring heuristics
 │   ├── shared/
-│   │   └── dock-geometry.js      # Bar/panel dimensions shared by main + renderer
+│   │   ├── dock-geometry.js      # Bar/panel dimensions shared by main + renderer
+│   │   └── typing-speed.js       # What each speed slider position really means
 │   ├── preload/
 │   │   ├── preload.js            # Dock panel IPC bridge
 │   │   └── capture-preload.js    # Capture window IPC bridge
@@ -215,7 +216,8 @@ The installer outputs to `dist/0xpaste Setup 1.1.0.exe`.
 │       └── capture/              # Fullscreen transparent drop target
 ├── scripts/
 │   ├── generate-icon.js          # Renders assets/icon.svg to PNG + multi-res ICO
-│   └── download-fonts.js         # Downloads Silkscreen font from Google Fonts
+│   ├── download-fonts.js         # Downloads Silkscreen font from Google Fonts
+│   └── preview-panel.js          # Serves the panel in a browser, for development
 ├── build/
 │   └── installer.nsh             # NSIS custom installer (WOW64-aware cleanup)
 └── assets/
@@ -245,6 +247,25 @@ On Dutch and other EU keyboard layouts, `^` `` ` `` `'` `~` `"` are *dead keys*:
 The result is identical output on a plain layout and on a dead-key layout, in local apps and in browser-based VM consoles alike. All 94 printable ASCII characters type through 1:1.
 
 > Keystrokes deliberately go through `SendKeys`, which lives inside a Microsoft-signed .NET assembly. Injecting raw `SendInput` keystrokes from runtime-compiled code reads as a keylogger pattern to endpoint security tools and gets flagged; the `SendKeys` route does not.
+
+### Typing speed
+
+`SendKeys` sleeps for 1ms after every key event it sends: every key down, every key up, every press of Shift. Windows rounds such a sleep up to its timer tick, 15.6ms by default, so a plain character costs about 31ms and a shifted one about 62ms whatever pause is configured. That is why typing used to top out near 24 characters a second, and why a 3,700 character command took two and a half minutes.
+
+The speed slider has two ranges:
+
+- **Classic** - 41ms/char (the old turbo) and everything slower. Nothing is changed here. It is how every version up to 1.2.0 typed, and it is where an existing installation stays until you move the slider.
+- **Fast** - everything below 41ms/char. The typing process asks Windows for a 1ms timer tick for itself, so those same sleeps take about 2ms. `SendKeys` is not touched and still produces every key; the keys are simply closer together. Each position is a time budget per character, the leftmost being no pause at all.
+
+Whether a console keeps up at a given speed depends on everything between you and the guest - browser, remote desktop hop, hypervisor, guest OS - and nobody publishes numbers for that. Find out with something harmless: paste a block of identical lines into a plain text editor on the far side. A lost character shows up at once as a line that is shorter than the others. If that happens, slide right and try again.
+
+If Windows does not grant the timer, a fast paste simply runs at the old turbo speed.
+
+> **For security teams.** The fast range adds four API imports to the small helper the typing process compiles at start: `timeBeginPeriod` and `timeEndPeriod` from `winmm.dll`, and `GetCurrentProcess` and `SetProcessInformation` from `kernel32.dll` (the documented way to have a timer request honoured for a process without a visible window on Windows 11). They affect the typing process only and end with it. No input API was added - keys still go through `SendKeys` and nothing else - and none of this runs while the slider is in the classic range.
+
+### Working on the panel
+
+`node scripts/preview-panel.js` serves the panel in an ordinary browser, with a stand-in for the preload bridge that is generated from the real one. Nothing is typed, clicked or started by it, so the interface can be worked on without generating any synthetic input.
 
 ---
 

@@ -114,11 +114,14 @@
           <div class="settings-row settings-col">
             <div class="settings-row-hdr">
               <span class="settings-label">// typing speed</span>
-              <span class="settings-value" id="speed-value">1ms/char</span>
+              <span class="settings-value" id="speed-value">57ms/char</span>
             </div>
-            <input type="range" id="speed-slider" min="0" max="150" step="1" value="1">
-            <div class="slider-ends"><span>turbo</span><span>slow</span></div>
-            <div class="settings-hint">turbo drops the pause between keystrokes - much faster, but a slow remote console may not keep up</div>
+            <!-- One position per speed that is really different, fastest on the
+                 left. The range and the meaning of each stop come from
+                 shared/typing-speed.js. Deliberately nothing but the slider
+                 and its number. -->
+            <input type="range" id="speed-slider" min="0" max="32" step="1" value="23">
+            <div class="slider-ends"><span>max</span><span>slow</span></div>
           </div>
 
           <!-- Initial delay -->
@@ -254,6 +257,7 @@
   </svg>
 
   <script src="../../shared/dock-geometry.js"></script>
+  <script src="../../shared/typing-speed.js"></script>
   <script src="glass-renderer.js"></script>
   <script src="overlay.js"></script>
 </body>

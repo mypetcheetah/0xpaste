@@ -4,7 +4,8 @@ const Store = require('electron-store');
 
 // Schema ranges are a deliberate superset of every value older builds could
 // have stored, so a pre-existing config never fails validation on load. The
-// UI enforces the real, tighter ranges (initialDelay 1-4000, charDelay 1-200).
+// UI enforces the real, tighter ranges (initialDelay 1-4000, and for typing
+// speed only the stops listed in shared/typing-speed.js).
 //
 // Keys dropped in 1.2.0 - 'hotkey' and 'panelPosition' - may still sit in an
 // existing config.json. Extra properties are not rejected, so they are simply
@@ -16,11 +17,21 @@ const schema = {
     minimum: 0,
     maximum: 10000
   },
-  // 0 is turbo: no pause between keystrokes at all
+  // Classic speed range: extra pause per character, 0 is the old turbo. Only
+  // used while fastCharMs is -1.
   charDelay: {
     type: 'number',
     default: 1,
     minimum: 0,
+    maximum: 1000
+  },
+  // Fast speed range, added in 1.3.0: -1 is off (type the classic way), 0 is
+  // no pause at all, N is a time budget of N ms per character. Off by default
+  // and absent from older configs, so nobody is moved onto it unasked.
+  fastCharMs: {
+    type: 'number',
+    default: -1,
+    minimum: -1,
     maximum: 1000
   },
   startWithWindows: {
@@ -67,6 +78,7 @@ const store = new Store({
   defaults: {
     initialDelay: 1,
     charDelay: 1,
+    fastCharMs: -1,
     startWithWindows: true,
     maxHistory: 50,
     accentColor: '#7C3AED',
@@ -81,6 +93,7 @@ function getSettings() {
   return {
     initialDelay: store.get('initialDelay'),
     charDelay: store.get('charDelay'),
+    fastCharMs: store.get('fastCharMs'),
     startWithWindows: store.get('startWithWindows'),
     maxHistory: store.get('maxHistory'),
     accentColor: store.get('accentColor'),

@@ -21,12 +21,30 @@
  * space yields the accent and swallows the space, after which the backspace
  * eats the accent itself and the character vanishes.
  *
- * Speed: charDelay is the pause between keystrokes. Windows rounds any
- * Start-Sleep up to a timer tick of roughly 15ms, so even "1ms" costs about
- * that much - at charDelay 0 the pause is skipped altogether, which is what
- * the panel calls turbo. Each character still goes through its own SendWait,
- * so nothing about how the keystrokes are produced changes; there is simply
- * no waiting in between. A slow remote console may not keep up.
+ * Speed. SendKeys sleeps 1ms after every single key event it sends (a key
+ * down, a key up, a Shift down ...). Windows rounds that sleep up to its timer
+ * tick, about 15.6ms by default, so an unshifted character costs ~31ms and a
+ * shifted one ~62ms whatever the pause setting says. That built-in cost is the
+ * whole reason typing used to top out at roughly 25 characters a second, and
+ * it is the one thing the two speed ranges treat differently:
+ *
+ *   classic - nothing is changed. charDelay is the extra pause after each
+ *             character (itself rounded up to a tick); 0 is the old turbo.
+ *             This is exactly how every version up to 1.2.0 typed.
+ *   fast    - selected by fastCharMs >= 0. The typing process asks Windows
+ *             for a 1ms timer tick for itself (winmm timeBeginPeriod, plus
+ *             the documented Windows 11 opt-out so the request is honoured
+ *             for a process that has no visible window). SendKeys is not
+ *             touched - its own 1ms sleeps simply stop being rounded up to
+ *             15.6ms - so every key is still produced by the same signed
+ *             assembly, only closer together. fastCharMs is then the time
+ *             budget per character, 0 meaning no pause at all.
+ *
+ * Each character still goes through its own SendWait in both ranges. After a
+ * paste the script reports how long the typing really took and, in the fast
+ * range, what one sleep really cost, so the panel can show measured numbers
+ * instead of promises. If Windows does not grant the timer, a fast paste
+ * simply runs at the classic key speed and says so.
  *
  * Enter handling follows the autoEnter setting exactly:
  *   off - a newline in the text is typed as a space, so the paste stays on one
@@ -42,8 +60,13 @@ const fs   = require('fs');
 const os   = require('os');
 
 // ---- Embedded PowerShell script ----
-// Params: -px,-py (screen coords), -textFile (UTF-8), -charDelay (ms, 0 = no
-//         pause at all), -initialDelay (ms, waited after focus), -autoEnter (0|1)
+// Params: -px,-py (screen coords), -textFile (UTF-8), -charDelay (classic
+//         range: ms pause per character, 0 = none), -initialDelay (ms, waited
+//         after focus), -autoEnter (0|1), -fastCharMs (-1 = classic range,
+//         0 = fast with no pause, N = fast with N ms per character)
+//
+// Careful when editing: this is a JavaScript template literal, so the script
+// must not contain a backtick or a dollar sign followed by an opening brace.
 const PS_SCRIPT = String.raw`
 param(
     [int]$px,
@@ -51,12 +74,14 @@ param(
     [string]$textFile,
     [int]$charDelay,
     [int]$initialDelay,
-    [int]$autoEnter
+    [int]$autoEnter,
+    [int]$fastCharMs = -1
 )
 
-Add-Type -AssemblyName System.Windows.Forms
+$fast = ($fastCharMs -ge 0)
 
-Add-Type @"
+# The focus click. This source has not changed since v1.0.5.
+$mouseSource = @"
 using System;
 using System.Runtime.InteropServices;
 
@@ -183,6 +208,85 @@ public class OxPasteWin32 {
 }
 "@
 
+# The timer helper for the fast speed range. It only asks Windows for a finer
+# timer tick for this one process, and hands it back afterwards. It sends no
+# input and reads none. It relies on the using lines at the top of the click
+# source above, because the two are compiled together.
+$timerSource = @'
+
+public static class OxPasteTimer {
+    // PROCESS_POWER_THROTTLING_STATE from processthreadsapi.h
+    [StructLayout(LayoutKind.Sequential)]
+    struct POWER_THROTTLING {
+        public uint Version;
+        public uint ControlMask;
+        public uint StateMask;
+    }
+
+    const int  ProcessPowerThrottling  = 4;    // PROCESS_INFORMATION_CLASS
+    const uint THROTTLING_VERSION      = 1;    // PROCESS_POWER_THROTTLING_CURRENT_VERSION
+    const uint IGNORE_TIMER_RESOLUTION = 0x4;  // PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+
+    [DllImport("winmm.dll")]
+    static extern uint timeBeginPeriod(uint uPeriod);
+
+    [DllImport("winmm.dll")]
+    static extern uint timeEndPeriod(uint uPeriod);
+
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetCurrentProcess();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool SetProcessInformation(IntPtr hProcess, int infoClass, ref POWER_THROTTLING info, uint size);
+
+    // Ask for a 1ms tick. Returns false when Windows refuses outright.
+    public static bool Begin() {
+        // Windows 11 may quietly ignore a timer request from a process whose
+        // windows are all invisible, which is exactly what this one is. The
+        // documented way to say "honour my request anyway" is to clear the
+        // IGNORE_TIMER_RESOLUTION throttle. Windows 10 does not know the flag
+        // and returns an error, which is fine: it has no such rule either.
+        try {
+            POWER_THROTTLING t;
+            t.Version     = THROTTLING_VERSION;
+            t.ControlMask = IGNORE_TIMER_RESOLUTION;
+            t.StateMask   = 0;
+            SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, ref t,
+                                  (uint)Marshal.SizeOf(typeof(POWER_THROTTLING)));
+        } catch (Exception) { }
+
+        return timeBeginPeriod(1) == 0;
+    }
+
+    public static void End() {
+        timeEndPeriod(1);
+    }
+}
+'@
+
+# 0 = classic range, the timer is never touched
+# 1 = fast range, timer helper compiled and the request accepted
+# 2 = fast range, but the helper or the request was not available here
+$timerState = 0
+
+Add-Type -AssemblyName System.Windows.Forms
+
+if ($fast) {
+    try {
+        Add-Type ($mouseSource + [Environment]::NewLine + $timerSource) -ErrorAction Stop
+        $timerState = 1
+    } catch {
+        # The timer helper would not compile on this machine. Typing has to
+        # work regardless, so fall back to the click helper on its own; the
+        # paste then simply runs at the classic key speed.
+        Add-Type $mouseSource
+        $timerState = 2
+    }
+} else {
+    # Classic range: compile exactly what every earlier version compiled.
+    Add-Type $mouseSource
+}
+
 # Focus the target, then wait the configured settle time before the first key.
 [OxPasteWin32]::ClickAt($px, $py)
 if ($initialDelay -gt 0) { Start-Sleep -Milliseconds $initialDelay }
@@ -199,6 +303,20 @@ if ($total -eq 0) {
     Write-Host "DONE"
     exit
 }
+
+# Fast range: ask for the 1ms tick now, right before the first key, so the
+# focus click and the settle time above keep the timing they always had.
+if ($timerState -eq 1) {
+    try {
+        if (-not [OxPasteTimer]::Begin()) { $timerState = 2 }
+    } catch {
+        $timerState = 2
+    }
+}
+
+# Wall clock for the typing itself, and where the next character is due.
+$clock = [Diagnostics.Stopwatch]::StartNew()
+$due   = 0.0
 
 # Dead-key character codes on NL / EU layouts: circumflex 94, backtick 96,
 # apostrophe 39, tilde 126, quote 34.
@@ -258,9 +376,28 @@ foreach ($char in $chars) {
         }
     }
 
-    # charDelay 0 means turbo: no pause between keystrokes. Any non-zero value
-    # is rounded up by Windows to a timer tick, roughly 15ms.
-    if ($charDelay -gt 0) { Start-Sleep -Milliseconds $charDelay }
+    if ($fast) {
+        # Fast range: fastCharMs is a time budget per character, not a pause.
+        # The keys of this character have already been sent; wait out whatever
+        # is left of its slot. Working from an absolute schedule keeps the
+        # average exact even though each sleep overshoots by a fraction.
+        if ($fastCharMs -gt 0) {
+            $due += $fastCharMs
+            $wait = [int][Math]::Floor($due - $clock.Elapsed.TotalMilliseconds)
+            if ($wait -ge 1) {
+                [Threading.Thread]::Sleep($wait)
+            } elseif ($wait -lt 0) {
+                # This character alone took longer than its slot. Restart the
+                # schedule from here rather than rushing the next characters
+                # to make up for it.
+                $due = $clock.Elapsed.TotalMilliseconds
+            }
+        }
+    } elseif ($charDelay -gt 0) {
+        # Classic range. charDelay 0 is the old turbo: no pause at all. Any
+        # other value is rounded up by Windows to a timer tick, roughly 15ms.
+        Start-Sleep -Milliseconds $charDelay
+    }
 
     # Writing to the pipe is not free, and one write per character is
     # measurable once the pause is gone. Only speak up when the number the
@@ -273,12 +410,33 @@ foreach ($char in $chars) {
     }
 }
 
+$typedMs = [int]$clock.ElapsedMilliseconds
+
 # Trailing Enter in the SAME session, while the target still has focus.
 if ($autoEnter -eq 1) {
     Start-Sleep -Milliseconds 30
     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
 }
 
+# Fast range: measure what one 1ms sleep really costs in this process, now
+# that it is in exactly the state it typed in. That is the cost of one key
+# event inside SendKeys, and it is the number that tells whether Windows
+# granted the timer (about 2ms) or not (about 15.6ms). Skipped in the classic
+# range, where it would only hold up the finish by an eighth of a second.
+$tickUs = 0
+if ($fast) {
+    $probe = [Diagnostics.Stopwatch]::StartNew()
+    for ($k = 0; $k -lt 8; $k++) { [Threading.Thread]::Sleep(1) }
+    $tickUs = [int]($probe.Elapsed.TotalMilliseconds * 125)
+}
+
+if ($timerState -eq 1) {
+    try { [OxPasteTimer]::End() } catch { }
+}
+
+# Whole numbers only: the format operator would otherwise write decimals the
+# way the Windows region does, and that is a comma in half the world.
+Write-Host ('STATS:{0}:{1}:{2}:{3}' -f $total, $typedMs, $tickUs, $timerState)
 Write-Host "DONE"
 [Console]::Out.Flush()
 `;
@@ -289,16 +447,58 @@ const state = {
   cancelled:        false,
   lastCancelled:    false,
   childProcess:     null,
-  progressCallback: null
+  progressCallback: null,
+  lastStats:        null
 };
+
+// A key event that costs less than this was typed with the fine timer. The
+// two real outcomes are about 2ms (granted) and about 15.6ms (not granted),
+// so anything in between is a safe place for the line.
+const FAST_TICK_LIMIT_MS = 5;
+
+// fastCharMs as the script wants it: -1 for the classic range, otherwise a
+// whole number of milliseconds per character (0 = no pause at all).
+function normaliseFastCharMs(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return -1;
+  return Math.min(Math.round(n), 1000);
+}
+
+// Turn the script's STATS line into something the panel can show as is.
+function buildStats(chars, typedMs, tickUs, timerState, fastCharMs, charDelay) {
+  const fast   = fastCharMs >= 0;
+  const tickMs = tickUs > 0 ? tickUs / 1000 : null;
+
+  let timer = 'off';                                   // classic range
+  if (fast) {
+    if (timerState !== 1)                                    timer = 'unavailable';
+    else if (tickMs !== null && tickMs < FAST_TICK_LIMIT_MS) timer = 'granted';
+    else                                                     timer = 'ignored';
+  }
+
+  return {
+    chars,
+    ms: typedMs,
+    // Too short a run says nothing about speed, so leave it out rather than
+    // show a number that is mostly rounding.
+    charsPerSec: (chars >= 20 && typedMs >= 200) ? Math.round((chars * 1000) / typedMs) : null,
+    tickMs,
+    timer,
+    fast,
+    fastCharMs,
+    charDelay
+  };
+}
 
 // ---- Main entry point ----
 async function startTyping(text, x, y, settings, progressCallback) {
   state.active           = true;
   state.cancelled        = false;
   state.progressCallback = progressCallback || null;
+  state.lastStats        = null;
 
   const { initialDelay, charDelay, autoEnter } = settings;
+  const fastCharMs = normaliseFastCharMs(settings.fastCharMs);
 
   const tmpText   = path.join(os.tmpdir(), `0xpaste_text_${Date.now()}.txt`);
   const tmpScript = path.join(os.tmpdir(), `0xpaste_typer_${Date.now()}.ps1`);
@@ -320,7 +520,8 @@ async function startTyping(text, x, y, settings, progressCallback) {
         '-textFile', tmpText,
         '-charDelay', String(charDelay),
         '-initialDelay', String(initialDelay),
-        '-autoEnter', autoEnter ? '1' : '0'
+        '-autoEnter', autoEnter ? '1' : '0',
+        '-fastCharMs', String(fastCharMs)
       ];
 
       const ps = spawn('powershell.exe', psArgs, {
@@ -340,6 +541,14 @@ async function startTyping(text, x, y, settings, progressCallback) {
           if (t.startsWith('PROGRESS:')) {
             const pct = parseInt(t.slice(9), 10);
             if (!isNaN(pct) && state.progressCallback) state.progressCallback(pct);
+          } else if (t.startsWith('STATS:')) {
+            const m = /^STATS:(\d+):(\d+):(\d+):(\d+)$/.exec(t);
+            if (m) {
+              state.lastStats = buildStats(
+                parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10), parseInt(m[4], 10),
+                fastCharMs, charDelay
+              );
+            }
           }
         }
       });
@@ -387,4 +596,14 @@ function wasCancelled() {
   return state.lastCancelled;
 }
 
-module.exports = { startTyping, cancel, isTyping, isAvailable, wasCancelled };
+// What the last finished paste measured, or null when it was cancelled or
+// never got as far as reporting.
+function getLastStats() {
+  return state.lastStats;
+}
+
+module.exports = {
+  startTyping, cancel, isTyping, isAvailable, wasCancelled, getLastStats,
+  // Exposed for static checks and tests only
+  PS_SCRIPT, buildStats, normaliseFastCharMs
+};
